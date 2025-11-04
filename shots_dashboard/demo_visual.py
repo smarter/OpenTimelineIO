@@ -22,9 +22,9 @@ except ImportError:
     from video_transcoder import generate_test_video, check_ffmpeg_available
 
 
-def run_flask_server(db_path: Path, watch_dir: Path, port: int = 5000) -> None:
+def run_flask_server(db_path: Path, watch_dir: Path, media_dir: Path, port: int = 5000) -> None:
     """Run Flask server with WebSocket support and file watching in a separate process."""
-    app, socketio = create_app(db_path, watch_dir=watch_dir)
+    app, socketio = create_app(db_path, watch_dir=watch_dir, media_dir=media_dir)
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
 
 
@@ -116,13 +116,15 @@ def run_visual_demo(
     demo_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\n📁 Demo files will be created in: {demo_dir}")
-    print(f"📁 Media files location: {demo_dir / 'media'}")
+
+    media_dir = demo_dir / 'media'
+    print(f"📁 Media files location: {media_dir}")
 
     # Start server in background with file watching
     print(f"\n1. Starting web server on http://localhost:{port}...")
     server_process = multiprocessing.Process(
         target=run_flask_server,
-        args=(db_path, demo_dir, port),  # Watch demo_dir for .otio files
+        args=(db_path, demo_dir, media_dir, port),  # Watch demo_dir for .otio files, media_dir for media files
         daemon=True
     )
     server_process.start()

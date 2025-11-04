@@ -19,7 +19,7 @@ try:
     from .database import Database, DatabaseError
     from .models import FileState, TrackerState
     from .timeline_tracker import TimelineTracker
-    from .timeline_watcher import TimelineWatcher
+    from .timeline_watcher import TimelineWatcher, MediaWatcher
     from .video_transcoder import (
         is_web_compatible,
         check_ffmpeg_available,
@@ -30,7 +30,7 @@ except ImportError:
     from database import Database, DatabaseError
     from models import FileState, TrackerState
     from timeline_tracker import TimelineTracker
-    from timeline_watcher import TimelineWatcher
+    from timeline_watcher import TimelineWatcher, MediaWatcher
     from video_transcoder import (
         is_web_compatible,
         check_ffmpeg_available,
@@ -39,13 +39,18 @@ except ImportError:
     )
 
 
-def create_app(db_path: Path | None = None, watch_dir: Path | None = None) -> tuple[Flask, SocketIO]:
+def create_app(
+    db_path: Path | None = None,
+    watch_dir: Path | None = None,
+    media_dir: Path | None = None
+) -> tuple[Flask, SocketIO]:
     """
     Application factory for creating Flask app with SocketIO.
 
     Args:
         db_path: Path to database file (for testing)
-        watch_dir: Optional directory to watch for .otio files
+        watch_dir: Optional directory to watch for .otio timeline files
+        media_dir: Optional directory to watch for media files
 
     Returns:
         Tuple of (Flask application, SocketIO instance)
@@ -472,27 +477,13 @@ def create_app(db_path: Path | None = None, watch_dir: Path | None = None) -> tu
         """Handle explicit state request from client."""
         emit_state_update('state_update')
 
-    # Set up file watcher if watch_dir is provided
+    # Set up timeline watcher if watch_dir is provided
     if watch_dir:
         def on_timeline_file_detected(timeline_path: Path) -> None:
             """Handle new or modified timeline file."""
             try:
                 print(f"📝 Detected timeline file: {timeline_path.name}")
                 tracker = get_tracker()
-
-                # First, auto-scan media directory if it exists
-                # This ensures files are tracked before updating from timeline
-                media_dir = timeline_path.parent / "media"
-                if media_dir.exists():
-                    print(f"   📂 Auto-scanning media directory: {media_dir}")
-                    try:
-                        scan_transitions = tracker.scan_directory(media_dir)
-                        if scan_transitions:
-                            print(f"   Found {len(scan_transitions)} new files")
-                    except Exception as scan_error:
-                        print(f"   Warning: Scan failed: {scan_error}")
-
-                # Then update from the timeline
                 transitions = tracker.update_from_timeline(timeline_path)
                 save_tracker(tracker)
 
@@ -504,9 +495,34 @@ def create_app(db_path: Path | None = None, watch_dir: Path | None = None) -> tu
             except Exception as e:
                 print(f"   ✗ Error processing {timeline_path.name}: {e}")
 
-        watcher = TimelineWatcher(watch_dir, on_timeline_file_detected)
-        watcher.start()
-        app.timeline_watcher = watcher  # Store on app for cleanup
+        timeline_watcher = TimelineWatcher(watch_dir, on_timeline_file_detected)
+        timeline_watcher.start()
+        app.timeline_watcher = timeline_watcher  # Store on app for cleanup
+
+    # Set up media watcher if media_dir is provided
+    if media_dir:
+        def on_media_file_detected(media_path: Path) -> None:
+            """Handle new media file."""
+            try:
+                print(f"🎬 Detected media file: {media_path.name}")
+                tracker = get_tracker()
+
+                # Track the new file by scanning its parent directory
+                # This will pick up the new file and mark it as NEW
+                transitions = tracker.scan_directory(media_path.parent, extensions={media_path.suffix.lower()})
+                save_tracker(tracker)
+
+                # Emit state update
+                if transitions:
+                    emit_state_update('scan_complete')
+                    print(f"   ✓ Tracked new file: {media_path.name}")
+                    print(f"   File state: NEW")
+            except Exception as e:
+                print(f"   ✗ Error tracking {media_path.name}: {e}")
+
+        media_watcher = MediaWatcher(media_dir, on_media_file_detected)
+        media_watcher.start()
+        app.media_watcher = media_watcher  # Store on app for cleanup
 
     return app, socketio
 
