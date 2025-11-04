@@ -62,8 +62,14 @@ You should see:
 ### Start the Web Server
 
 ```bash
+# From the OpenTimelineIO root directory
+python -m shots_dashboard
+```
+
+Or alternatively:
+```bash
 cd shots_dashboard
-python -m app
+python app.py
 ```
 
 The dashboard will be available at: http://localhost:5000
@@ -90,8 +96,7 @@ The dashboard will be available at: http://localhost:5000
 
 ```bash
 # 1. Start the dashboard
-cd shots_dashboard
-python -m app
+python -m shots_dashboard
 
 # In your browser:
 # - Navigate to http://localhost:5000
@@ -99,7 +104,7 @@ python -m app
 # - Update timeline: /path/to/your/timeline.otio
 
 # 2. Or use programmatically
-python example.py
+python shots_dashboard/example.py
 ```
 
 ## Example Timeline File

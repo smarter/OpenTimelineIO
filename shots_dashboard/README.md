@@ -109,9 +109,15 @@ pip install -r shots_dashboard_requirements-dev.txt  # For development
 
 ### Running the Dashboard
 
+From the OpenTimelineIO root directory:
+```bash
+python -m shots_dashboard
+```
+
+Or from within the shots_dashboard directory:
 ```bash
 cd shots_dashboard
-python -m app
+python app.py
 ```
 
 Then navigate to http://localhost:5000 in your browser.

@@ -11,7 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .models import FileRecord, FileState, TrackerState
+try:
+    from .models import FileRecord, FileState, TrackerState
+except ImportError:
+    from models import FileRecord, FileState, TrackerState
 
 
 class DatabaseError(Exception):

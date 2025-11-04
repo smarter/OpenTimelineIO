@@ -13,7 +13,10 @@ from typing import Set
 
 import opentimelineio as otio
 
-from .models import FileRecord, FileState, StateTransition, TrackerState
+try:
+    from .models import FileRecord, FileState, StateTransition, TrackerState
+except ImportError:
+    from models import FileRecord, FileState, StateTransition, TrackerState
 
 
 class TimelineTracker:

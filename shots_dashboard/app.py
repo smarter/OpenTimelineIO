@@ -13,9 +13,15 @@ from typing import Any
 
 from flask import Flask, jsonify, render_template, request
 
-from .database import Database, DatabaseError
-from .models import FileState, TrackerState
-from .timeline_tracker import TimelineTracker
+# Try relative imports first (when used as package), fall back to absolute
+try:
+    from .database import Database, DatabaseError
+    from .models import FileState, TrackerState
+    from .timeline_tracker import TimelineTracker
+except ImportError:
+    from database import Database, DatabaseError
+    from models import FileState, TrackerState
+    from timeline_tracker import TimelineTracker
 
 
 def create_app(db_path: Path | None = None) -> Flask:
