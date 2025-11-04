@@ -479,6 +479,20 @@ def create_app(db_path: Path | None = None, watch_dir: Path | None = None) -> tu
             try:
                 print(f"📝 Detected timeline file: {timeline_path.name}")
                 tracker = get_tracker()
+
+                # First, auto-scan media directory if it exists
+                # This ensures files are tracked before updating from timeline
+                media_dir = timeline_path.parent / "media"
+                if media_dir.exists():
+                    print(f"   📂 Auto-scanning media directory: {media_dir}")
+                    try:
+                        scan_transitions = tracker.scan_directory(media_dir)
+                        if scan_transitions:
+                            print(f"   Found {len(scan_transitions)} new files")
+                    except Exception as scan_error:
+                        print(f"   Warning: Scan failed: {scan_error}")
+
+                # Then update from the timeline
                 transitions = tracker.update_from_timeline(timeline_path)
                 save_tracker(tracker)
 
