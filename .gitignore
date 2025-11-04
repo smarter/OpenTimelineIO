@@ -11,6 +11,7 @@ htmlcov
 xcuserdata/
 .venv/
 .cache
+.hypothesis/
 
 # Pycharm metadata
 .idea/

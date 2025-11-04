@@ -239,25 +239,18 @@ def test_error_handling_invalid_timeline(
     expect(page.locator("#status-text")).to_contain_text("Error")
 
 
-def test_refresh_button(
+def test_auto_refresh_indicator(
     page: Page,
     live_server: str,
     test_media_dir: Path
 ) -> None:
-    """Test refresh button updates display."""
+    """Test auto-refresh indicator is visible."""
     page.goto(live_server)
 
-    # Scan directory
-    page.locator("#scan-directory").fill(str(test_media_dir))
-    page.locator("#scan-btn").click()
-    time.sleep(1)
-
-    # Click refresh
-    page.locator("#refresh-btn").click()
-    time.sleep(1)
-
-    # Data should still be there
-    expect(page.locator("#stat-total")).to_have_text("5")
+    # Check auto-refresh indicator is present
+    expect(page.locator(".auto-refresh-indicator")).to_be_visible()
+    expect(page.locator(".pulse-dot")).to_be_visible()
+    expect(page.locator(".auto-refresh-text")).to_contain_text("Auto-updating")
 
 
 def test_multiple_updates_show_transitions(
