@@ -75,15 +75,18 @@ This approach makes all valid transitions explicit and invalid ones impossible a
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# From the OpenTimelineIO root directory
+cd OpenTimelineIO
+
 # Create virtual environment
 uv venv
 
 # Activate virtual environment
-source .venv/bin/activate  # On Unix
+source .venv/bin/activate  # On Unix/macOS
 # or
 .venv\Scripts\activate  # On Windows
 
-# Install dependencies
+# Install dependencies (includes OpenTimelineIO from PyPI)
 uv pip install -r shots_dashboard_requirements.txt
 
 # For development (includes pytest, basedpyright)
@@ -93,6 +96,8 @@ uv pip install -r shots_dashboard_requirements-dev.txt
 ### Using pip
 
 ```bash
+cd OpenTimelineIO
+
 python -m venv .venv
 source .venv/bin/activate
 

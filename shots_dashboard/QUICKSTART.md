@@ -5,7 +5,7 @@ This guide will help you get the Shots Dashboard up and running quickly.
 ## Prerequisites
 
 - Python 3.10 or higher
-- OpenTimelineIO (already included in this repository)
+- uv (recommended) or pip
 
 ## Installation
 
@@ -18,17 +18,16 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # From the OpenTimelineIO root directory
 cd OpenTimelineIO
 
-# Create and activate virtual environment
+# Create virtual environment
 uv venv
-source .venv/bin/activate  # On Unix
+
+# Activate virtual environment
+source .venv/bin/activate  # On Unix/macOS
 # or
 .venv\Scripts\activate  # On Windows
 
-# Install OpenTimelineIO
-python setup.py install
-
-# Install dashboard dependencies
-uv pip install flask
+# Install all dependencies (including OpenTimelineIO from PyPI)
+uv pip install -r shots_dashboard_requirements.txt
 ```
 
 ### Option 2: Using pip
@@ -39,13 +38,10 @@ cd OpenTimelineIO
 
 # Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Unix
+source .venv/bin/activate  # On Unix/macOS
 
-# Install OpenTimelineIO
-python setup.py install
-
-# Install dashboard dependencies
-pip install flask
+# Install dependencies
+pip install -r shots_dashboard_requirements.txt
 ```
 
 ## Quick Test
@@ -133,9 +129,9 @@ otio.adapters.write_to_file(timeline, "timeline.otio")
 
 ### "Module not found" errors
 
-Make sure you've installed OpenTimelineIO:
+Make sure you've installed the dependencies:
 ```bash
-python setup.py install
+uv pip install -r shots_dashboard_requirements.txt
 ```
 
 ### Port 5000 already in use
@@ -157,7 +153,7 @@ The dashboard matches files by filename. Make sure:
 
 ```bash
 # Install test dependencies
-pip install pytest pytest-cov
+uv pip install -r shots_dashboard_requirements-dev.txt
 
 # Run all tests
 pytest tests/test_shots_dashboard_*.py -v
@@ -169,8 +165,8 @@ pytest tests/test_shots_dashboard_*.py --cov=shots_dashboard
 ### Type Check (requires basedpyright)
 
 ```bash
-# Install basedpyright
-pip install basedpyright
+# Install dev dependencies (includes basedpyright)
+uv pip install -r shots_dashboard_requirements-dev.txt
 
 # Run type checker
 basedpyright shots_dashboard

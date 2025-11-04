@@ -3,6 +3,3 @@
 
 flask>=3.0.0
 opentimelineio>=0.16.0
-
-# Development dependencies (optional)
-# Install with: uv pip install -r shots_dashboard_requirements.txt -r shots_dashboard_requirements-dev.txt
