@@ -61,18 +61,20 @@ You should see:
 
 ### Quick Demo (Recommended for First Time)
 
-Try the demo mode to see the dashboard in action:
+Try the **visual demo mode** to see the dashboard in action:
 
 ```bash
 python -m shots_dashboard --demo
 ```
 
 This will:
-- Create sample media files and timelines
-- Run through 4 realistic scenarios
-- Start the web interface with demo data loaded
+1. Start the web server in the background
+2. Wait for you to open http://localhost:5000 in your browser
+3. Press ENTER when you're ready
+4. Execute a realistic production scenario with delays
+5. **You'll see the dashboard auto-update** as files are created, scanned, and timeline states change
 
-Navigate to http://localhost:5000 and click "Refresh" to see the demo data!
+The dashboard automatically refreshes every 2 seconds, so you'll watch changes appear in real-time!
 
 ### Normal Mode
 

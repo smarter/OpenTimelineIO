@@ -132,23 +132,26 @@ Then navigate to http://localhost:5000 in your browser.
 
 ### Demo Mode
 
-Demo mode is perfect for exploring the dashboard:
+Demo mode provides a visual, interactive demonstration:
 
 ```bash
 python -m shots_dashboard --demo
 ```
 
-This will:
-1. Create sample media files (11 files)
-2. Generate 3 timeline versions (initial, revised, final)
-3. Run through 4 realistic scenarios:
-   - Initial directory scan
-   - First timeline update
-   - Revised cut with more shots
-   - Final cut with replacements
-4. Start the web interface with demo data loaded
+**What happens:**
+1. **Server starts** in the background
+2. You open your browser to http://localhost:5000
+3. Press ENTER when ready
+4. **Watch the dashboard auto-update** as the scenario executes:
+   - Files are created
+   - Directory is scanned
+   - Timeline files are processed
+   - State transitions happen in real-time
+5. Server keeps running for you to explore the data
 
-Demo data is created in `~/.shots_dashboard/demo/` so you can experiment with it.
+The dashboard **auto-refreshes every 2 seconds**, so you'll see changes appear automatically as the scenario runs.
+
+Demo data is created in `~/.shots_dashboard/demo/` and you can experiment with it after the scenario completes.
 
 ### Using the Web Interface
 
@@ -192,10 +195,43 @@ print(f"Removed: {len(files['files']['removed'])}")
 
 ### Running Tests
 
-The project includes comprehensive testing:
-- Unit tests for models and database
-- Integration tests for Flask API
-- End-to-end tests with Playwright
+The project includes comprehensive testing with a unique **scenario DSL**:
+
+- **Unit tests**: Individual components
+- **Integration tests**: Flask API and database
+- **Property tests**: Hypothesis-based with scenario DSL
+- **E2E tests**: Full workflows with Playwright
+
+#### Scenario DSL
+
+The dashboard uses a declarative DSL for scenarios that:
+1. Can be **simulated** (in-memory, fast)
+2. Can be **executed** (actual filesystem)
+3. Are **property-tested** with Hypothesis to ensure equivalence
+
+Example scenario:
+```python
+from shots_dashboard.scenario_dsl import *
+
+scenario = Scenario(
+    name="basic_workflow",
+    description="Scan and update from timeline",
+    actions=[
+        CreateFile(Path("media/shot_001.mov")),
+        ScanDirectory(Path("media")),
+        CreateTimeline(Path("timeline.otio"), ("shot_001.mov",)),
+        UpdateFromTimeline(Path("timeline.otio")),
+        AssertFileState(Path("media/shot_001.mov"), "IN_USE"),
+    ]
+)
+```
+
+This same scenario can be:
+- **Simulated** for fast unit testing
+- **Executed** on disk for integration testing
+- **Compared** via property tests to ensure both produce same results
+
+#### Running Tests
 
 ```bash
 # Install test dependencies
@@ -205,17 +241,17 @@ playwright install  # First time only
 # Run all tests
 pytest
 
+# Run specific test types
+pytest -m unit          # Unit tests
+pytest -m integration   # Integration tests
+pytest -m property      # Property tests with Hypothesis
+pytest -m e2e           # E2E tests with Playwright
+
 # Run with coverage
 pytest --cov=shots_dashboard --cov-report=html
 
-# Run only E2E tests
-pytest -m e2e
-
-# Run E2E tests in headed mode (see the browser)
+# Run E2E tests with visible browser
 PLAYWRIGHT_HEADLESS=0 pytest -m e2e
-
-# Run specific test
-pytest tests/test_e2e_dashboard.py::test_dashboard_loads -v
 ```
 
 See [TESTING.md](TESTING.md) for comprehensive testing documentation.

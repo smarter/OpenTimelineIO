@@ -266,36 +266,19 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.demo:
-        # Run demo mode
+        # Run visual demo mode (server + scenario playback)
         from pathlib import Path
         try:
-            from demo import run_demo
+            from demo_visual import run_visual_demo
         except ImportError:
-            from shots_dashboard.demo import run_demo
-
-        print("\n" + "=" * 70)
-        print("DEMO MODE")
-        print("=" * 70)
-        print("\nRunning automated demo scenarios...")
-        print("This will create sample data and show you how the dashboard works.\n")
+            from shots_dashboard.demo_visual import run_visual_demo
 
         demo_dir = Path.home() / ".shots_dashboard" / "demo"
         db_path = demo_dir / "demo_state.json"
 
-        run_demo(demo_dir, db_path)
+        run_visual_demo(demo_dir, db_path, args.port)
+        return  # Visual demo handles its own server
 
-        print("\n" + "=" * 70)
-        print("Demo complete! Now starting the web interface...")
-        print("=" * 70)
-        print(f"\nTo view the demo data:")
-        print(f"  1. Navigate to http://localhost:{args.port}")
-        print(f"  2. Click 'Refresh' to load the demo data")
-        print(f"  3. Or scan: {demo_dir / 'media'}")
-        print(f"  4. Or update from: {demo_dir / 'timelines' / 'final_cut.otio'}")
-        print()
-
-        # Create app with demo database
-        app = create_app(db_path)
     else:
         # Normal mode
         app = create_app()

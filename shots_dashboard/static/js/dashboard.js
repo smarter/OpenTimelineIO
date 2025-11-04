@@ -2,15 +2,16 @@
 
 class ShotsDashboard {
     constructor() {
+        this.autoRefreshInterval = null;
         this.setupEventListeners();
         this.loadData();
+        this.startAutoRefresh();
     }
 
     setupEventListeners() {
         document.getElementById('scan-btn').addEventListener('click', () => this.scanDirectory());
         document.getElementById('update-btn').addEventListener('click', () => this.updateTimeline());
         document.getElementById('reset-btn').addEventListener('click', () => this.reset());
-        document.getElementById('refresh-btn').addEventListener('click', () => this.loadData());
 
         // Allow Enter key in inputs
         document.getElementById('scan-directory').addEventListener('keypress', (e) => {
@@ -260,6 +261,20 @@ class ShotsDashboard {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    startAutoRefresh() {
+        // Refresh every 2 seconds
+        this.autoRefreshInterval = setInterval(() => {
+            this.loadData();
+        }, 2000);
+    }
+
+    stopAutoRefresh() {
+        if (this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+        }
     }
 }
 
