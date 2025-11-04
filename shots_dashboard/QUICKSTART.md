@@ -59,11 +59,29 @@ You should see:
 
 ## Running the Dashboard
 
-### Start the Web Server
+### Quick Demo (Recommended for First Time)
+
+Try the demo mode to see the dashboard in action:
+
+```bash
+python -m shots_dashboard --demo
+```
+
+This will:
+- Create sample media files and timelines
+- Run through 4 realistic scenarios
+- Start the web interface with demo data loaded
+
+Navigate to http://localhost:5000 and click "Refresh" to see the demo data!
+
+### Normal Mode
 
 ```bash
 # From the OpenTimelineIO root directory
 python -m shots_dashboard
+
+# Or with custom port
+python -m shots_dashboard --port 8000
 ```
 
 Or alternatively:
@@ -154,20 +172,33 @@ The dashboard matches files by filename. Make sure:
 
 ## Development
 
-### Run Tests (requires pytest)
+### Run Tests
 
 ```bash
 # Install test dependencies
 uv pip install -r shots_dashboard_requirements-dev.txt
+playwright install  # Install browsers (first time only)
 
-# Run all tests
-pytest tests/test_shots_dashboard_*.py -v
+# Run all tests (unit, integration, E2E)
+pytest
 
 # Run with coverage
-pytest tests/test_shots_dashboard_*.py --cov=shots_dashboard
+pytest --cov=shots_dashboard --cov-report=html
+
+# Run only E2E tests
+pytest -m e2e
+
+# Run E2E tests with visible browser
+PLAYWRIGHT_HEADLESS=0 pytest -m e2e
 ```
 
-### Type Check (requires basedpyright)
+See [TESTING.md](TESTING.md) for comprehensive testing documentation including:
+- Unit tests
+- Integration tests
+- End-to-end tests with Playwright
+- Demo mode details
+
+### Type Check
 
 ```bash
 # Install dev dependencies (includes basedpyright)

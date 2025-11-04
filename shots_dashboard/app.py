@@ -241,11 +241,73 @@ def create_app(db_path: Path | None = None) -> Flask:
 
 def main() -> None:
     """Run the Flask development server."""
-    app = create_app()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Shots Dashboard - Track timeline file usage"
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Run in demo mode with sample data and automated scenarios"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        help="Port to run the server on (default: 5000)"
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to (default: 0.0.0.0)"
+    )
+
+    args = parser.parse_args()
+
+    if args.demo:
+        # Run demo mode
+        from pathlib import Path
+        try:
+            from demo import run_demo
+        except ImportError:
+            from shots_dashboard.demo import run_demo
+
+        print("\n" + "=" * 70)
+        print("DEMO MODE")
+        print("=" * 70)
+        print("\nRunning automated demo scenarios...")
+        print("This will create sample data and show you how the dashboard works.\n")
+
+        demo_dir = Path.home() / ".shots_dashboard" / "demo"
+        db_path = demo_dir / "demo_state.json"
+
+        run_demo(demo_dir, db_path)
+
+        print("\n" + "=" * 70)
+        print("Demo complete! Now starting the web interface...")
+        print("=" * 70)
+        print(f"\nTo view the demo data:")
+        print(f"  1. Navigate to http://localhost:{args.port}")
+        print(f"  2. Click 'Refresh' to load the demo data")
+        print(f"  3. Or scan: {demo_dir / 'media'}")
+        print(f"  4. Or update from: {demo_dir / 'timelines' / 'final_cut.otio'}")
+        print()
+
+        # Create app with demo database
+        app = create_app(db_path)
+    else:
+        # Normal mode
+        app = create_app()
+
     print("Starting Shots Dashboard...")
     print(f"Database: {app.config['DATABASE_PATH']}")
-    print("Navigate to http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print(f"Navigate to http://localhost:{args.port}")
+
+    if args.demo:
+        print("\n💡 Demo mode is active! Sample data has been created.")
+
+    app.run(debug=True, host=args.host, port=args.port)
 
 
 if __name__ == '__main__':

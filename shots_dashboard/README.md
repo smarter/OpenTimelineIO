@@ -111,16 +111,44 @@ pip install -r shots_dashboard_requirements-dev.txt  # For development
 
 From the OpenTimelineIO root directory:
 ```bash
+# Normal mode
 python -m shots_dashboard
+
+# Demo mode (with sample data and automated scenarios)
+python -m shots_dashboard --demo
+
+# Custom port
+python -m shots_dashboard --port 8000
 ```
 
 Or from within the shots_dashboard directory:
 ```bash
 cd shots_dashboard
 python app.py
+python app.py --demo  # Demo mode
 ```
 
 Then navigate to http://localhost:5000 in your browser.
+
+### Demo Mode
+
+Demo mode is perfect for exploring the dashboard:
+
+```bash
+python -m shots_dashboard --demo
+```
+
+This will:
+1. Create sample media files (11 files)
+2. Generate 3 timeline versions (initial, revised, final)
+3. Run through 4 realistic scenarios:
+   - Initial directory scan
+   - First timeline update
+   - Revised cut with more shots
+   - Final cut with replacements
+4. Start the web interface with demo data loaded
+
+Demo data is created in `~/.shots_dashboard/demo/` so you can experiment with it.
 
 ### Using the Web Interface
 
@@ -164,19 +192,33 @@ print(f"Removed: {len(files['files']['removed'])}")
 
 ### Running Tests
 
+The project includes comprehensive testing:
+- Unit tests for models and database
+- Integration tests for Flask API
+- End-to-end tests with Playwright
+
 ```bash
+# Install test dependencies
+uv pip install -r shots_dashboard_requirements-dev.txt
+playwright install  # First time only
+
 # Run all tests
 pytest
 
 # Run with coverage
 pytest --cov=shots_dashboard --cov-report=html
 
-# Run specific test file
-pytest tests/test_models.py
+# Run only E2E tests
+pytest -m e2e
+
+# Run E2E tests in headed mode (see the browser)
+PLAYWRIGHT_HEADLESS=0 pytest -m e2e
 
 # Run specific test
-pytest tests/test_models.py::TestFileState::test_all_states_exist
+pytest tests/test_e2e_dashboard.py::test_dashboard_loads -v
 ```
+
+See [TESTING.md](TESTING.md) for comprehensive testing documentation.
 
 ### Type Checking
 
