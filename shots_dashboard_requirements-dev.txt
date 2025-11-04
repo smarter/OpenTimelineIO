@@ -1,0 +1,6 @@
+# Development Requirements
+# Install with: uv pip install -r shots_dashboard_requirements-dev.txt
+
+pytest>=7.4.0
+pytest-cov>=4.1.0
+basedpyright>=1.10.0

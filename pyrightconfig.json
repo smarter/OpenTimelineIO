@@ -1,0 +1,32 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.10",
+  "include": [
+    "shots_dashboard",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    ".venv",
+    "**/.pytest_cache"
+  ],
+  "reportMissingTypeStubs": "warning",
+  "reportUnknownMemberType": "warning",
+  "reportUnknownArgumentType": "warning",
+  "reportUnknownVariableType": "warning",
+  "reportUnknownLambdaType": "warning",
+  "reportImplicitStringConcatenation": "warning",
+  "reportMissingSuperCall": "warning",
+  "reportUninitializedInstanceVariable": "warning",
+  "reportInvalidTypeVarUse": "error",
+  "reportUnnecessaryIsInstance": "warning",
+  "reportUnnecessaryCast": "warning",
+  "reportUnnecessaryComparison": "warning",
+  "reportAssertAlwaysTrue": "warning",
+  "reportSelfClsParameterName": "error",
+  "reportImplicitOverride": "warning",
+  "reportPropertyTypeMismatch": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportIncompatibleVariableOverride": "error"
+}
