@@ -36,7 +36,7 @@ class TestTimelineHistoryIntegration(unittest.TestCase):
             f.touch()
 
         # Create Flask app
-        self.app = create_app(self.db_path)
+        self.app, self.socketio = create_app(self.db_path)
         self.app.config['TESTING'] = True
         self.client = self.app.test_client()
 
@@ -124,7 +124,7 @@ class TestTimelineHistoryIntegration(unittest.TestCase):
         self.assertEqual(len(data1['snapshots']), 1)  # v1 in historical
 
         # Create new app instance (simulates restart)
-        new_app = create_app(self.db_path)
+        new_app, new_socketio = create_app(self.db_path)
         new_app.config['TESTING'] = True
         new_client = new_app.test_client()
 

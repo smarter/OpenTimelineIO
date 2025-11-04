@@ -15,7 +15,8 @@ from shots_dashboard.app import create_app
 def app(tmp_path: Path) -> Flask:
     """Create Flask app for testing."""
     db_path = tmp_path / "test_db.json"
-    return create_app(db_path)
+    app, socketio = create_app(db_path)
+    return app
 
 
 @pytest.fixture
@@ -255,7 +256,7 @@ class TestWorkflow:
         db_path = tmp_path / "persistent_db.json"
 
         # Create first app instance and add data
-        app1 = create_app(db_path)
+        app1, socketio1 = create_app(db_path)
         client1 = app1.test_client()
         client1.post('/api/scan', json={"directory": str(temp_media_dir)})
 
@@ -264,7 +265,7 @@ class TestWorkflow:
         assert data1["stats"]["total"] == 2
 
         # Create second app instance with same database
-        app2 = create_app(db_path)
+        app2, socketio2 = create_app(db_path)
         client2 = app2.test_client()
 
         response = client2.get('/api/status')

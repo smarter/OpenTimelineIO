@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context
+from flask_socketio import SocketIO, emit
 
 # Try relative imports first (when used as package), fall back to absolute
 try:
@@ -36,15 +37,15 @@ except ImportError:
     )
 
 
-def create_app(db_path: Path | None = None) -> Flask:
+def create_app(db_path: Path | None = None) -> tuple[Flask, SocketIO]:
     """
-    Application factory for creating Flask app.
+    Application factory for creating Flask app with SocketIO.
 
     Args:
         db_path: Path to database file (for testing)
 
     Returns:
-        Configured Flask application
+        Tuple of (Flask application, SocketIO instance)
     """
     app = Flask(__name__)
 
@@ -54,6 +55,10 @@ def create_app(db_path: Path | None = None) -> Flask:
 
     app.config['DATABASE_PATH'] = db_path
     app.config['JSON_SORT_KEYS'] = False
+    app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
+
+    # Initialize SocketIO
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
     # Initialize database
     db = Database(db_path)
@@ -66,6 +71,63 @@ def create_app(db_path: Path | None = None) -> Flask:
     def save_tracker(tracker: TimelineTracker) -> None:
         """Save tracker state to database."""
         db.save(tracker.state)
+
+    def emit_state_update(event_type: str = 'state_update') -> None:
+        """
+        Emit state update to all connected clients.
+
+        Args:
+            event_type: Type of event ('state_update', 'scan', 'timeline_update', etc.)
+        """
+        try:
+            tracker = get_tracker()
+
+            # Get all current state
+            stats = tracker.get_stats()
+            files = {
+                "new": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                        for f in tracker.state.new_files],
+                "in_use": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                          for f in tracker.state.in_use_files],
+                "removed": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                           for f in tracker.state.removed_files],
+            }
+
+            # Get timeline history
+            history = tracker.state.timeline_history
+            current_snapshot = history.get_current()
+            historical_snapshots = history.get_historical()
+            historical_clips = history.get_all_historical_clips()
+
+            timeline_history = {
+                "current": {
+                    "timeline_path": str(current_snapshot.timeline_path) if current_snapshot else None,
+                    "timestamp": current_snapshot.timestamp.isoformat() if current_snapshot else None,
+                    "clips": list(current_snapshot.clip_names) if current_snapshot else []
+                } if current_snapshot else None,
+                "historical_clips": sorted(list(historical_clips)),
+                "snapshots": [
+                    {
+                        "timeline_path": str(snapshot.timeline_path),
+                        "timestamp": snapshot.timestamp.isoformat(),
+                        "clips": list(snapshot.clip_names),
+                        "clip_count": len(snapshot.clip_names)
+                    }
+                    for snapshot in historical_snapshots
+                ]
+            }
+
+            # Emit to all connected clients
+            socketio.emit(event_type, {
+                "stats": stats,
+                "files": files,
+                "timeline_history": timeline_history,
+                "timeline_path": str(tracker.state.timeline_path) if tracker.state.timeline_path else None,
+                "last_scan": tracker.state.last_scan.isoformat() if tracker.state.last_scan else None,
+                "timestamp": datetime.now().isoformat()
+            })
+        except Exception as e:
+            socketio.emit('error', {"message": str(e)})
 
     @app.route('/')
     def index() -> str:
@@ -143,6 +205,9 @@ def create_app(db_path: Path | None = None) -> Flask:
             )
             save_tracker(tracker)
 
+            # Emit state update to all connected clients
+            emit_state_update('scan_complete')
+
             return jsonify({
                 "success": True,
                 "message": f"Scanned {directory}",
@@ -187,6 +252,9 @@ def create_app(db_path: Path | None = None) -> Flask:
             transitions = tracker.update_from_timeline(timeline_path)
             save_tracker(tracker)
 
+            # Emit state update to all connected clients
+            emit_state_update('timeline_update_complete')
+
             return jsonify({
                 "success": True,
                 "message": f"Updated from timeline: {timeline_path.name}",
@@ -219,6 +287,10 @@ def create_app(db_path: Path | None = None) -> Flask:
         """Reset all state."""
         try:
             db.reset()
+
+            # Emit state update to all connected clients
+            emit_state_update('reset_complete')
+
             return jsonify({
                 "success": True,
                 "message": "State reset successfully"
@@ -379,7 +451,25 @@ def create_app(db_path: Path | None = None) -> Flask:
             "error": "Internal server error"
         }), 500
 
-    return app
+    # WebSocket event handlers
+    @socketio.on('connect')
+    def handle_connect() -> None:
+        """Handle client connection."""
+        print("Client connected")
+        # Send current state to newly connected client
+        emit_state_update('initial_state')
+
+    @socketio.on('disconnect')
+    def handle_disconnect() -> None:
+        """Handle client disconnection."""
+        print("Client disconnected")
+
+    @socketio.on('request_state')
+    def handle_request_state() -> None:
+        """Handle explicit state request from client."""
+        emit_state_update('state_update')
+
+    return app, socketio
 
 
 def main() -> None:
@@ -424,7 +514,7 @@ def main() -> None:
 
     else:
         # Normal mode
-        app = create_app()
+        app, socketio = create_app()
 
     print("Starting Shots Dashboard...")
     print(f"Database: {app.config['DATABASE_PATH']}")
@@ -433,7 +523,7 @@ def main() -> None:
     if args.demo:
         print("\n💡 Demo mode is active! Sample data has been created.")
 
-    app.run(debug=True, host=args.host, port=args.port)
+    socketio.run(app, debug=True, host=args.host, port=args.port)
 
 
 if __name__ == '__main__':

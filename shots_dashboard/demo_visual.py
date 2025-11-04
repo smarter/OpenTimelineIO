@@ -23,9 +23,9 @@ except ImportError:
 
 
 def run_flask_server(db_path: Path, port: int = 5000) -> None:
-    """Run Flask server in a separate process."""
-    app = create_app(db_path)
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    """Run Flask server with WebSocket support in a separate process."""
+    app, socketio = create_app(db_path)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
 
 
 def run_visual_demo(

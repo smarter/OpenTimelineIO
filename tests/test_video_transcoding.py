@@ -107,7 +107,7 @@ class TestPreviewAPI(unittest.TestCase):
         self.db_path = self.base_dir / "test.json"
 
         # Create Flask app
-        self.app = create_app(self.db_path)
+        self.app, self.socketio = create_app(self.db_path)
         self.app.config['TESTING'] = True
         self.client = self.app.test_client()
 

@@ -2,13 +2,13 @@
 
 class ShotsDashboard {
     constructor() {
-        this.autoRefreshInterval = null;
+        this.socket = null;
         this.previewTimeout = null;
         this.currentPreviewFilename = null;
         this.setupEventListeners();
         this.setupVideoPreview();
-        this.loadData();
-        this.startAutoRefresh();
+        this.setupWebSocket();
+        // Initial load will come from WebSocket connection
     }
 
     setupEventListeners() {
@@ -342,18 +342,60 @@ class ShotsDashboard {
         historicalSection.style.display = show ? 'block' : 'none';
     }
 
-    startAutoRefresh() {
-        // Refresh every 2 seconds
-        this.autoRefreshInterval = setInterval(() => {
-            this.loadData();
-        }, 2000);
+    setupWebSocket() {
+        // Connect to WebSocket server
+        this.socket = io();
+
+        // Handle connection
+        this.socket.on('connect', () => {
+            console.log('WebSocket connected');
+            this.showStatus('Connected', 'success');
+        });
+
+        // Handle disconnection
+        this.socket.on('disconnect', () => {
+            console.log('WebSocket disconnected');
+            this.showStatus('Disconnected - Reconnecting...', 'error');
+        });
+
+        // Handle all state update events
+        const updateEvents = [
+            'initial_state',
+            'state_update',
+            'scan_complete',
+            'timeline_update_complete',
+            'reset_complete'
+        ];
+
+        updateEvents.forEach(event => {
+            this.socket.on(event, (data) => {
+                console.log(`Received ${event}:`, data);
+                this.handleStateUpdate(data);
+            });
+        });
+
+        // Handle errors
+        this.socket.on('error', (data) => {
+            console.error('WebSocket error:', data);
+            this.showStatus(`Error: ${data.message}`, 'error');
+        });
     }
 
-    stopAutoRefresh() {
-        if (this.autoRefreshInterval) {
-            clearInterval(this.autoRefreshInterval);
-            this.autoRefreshInterval = null;
+    handleStateUpdate(data) {
+        // Update UI with new state from WebSocket
+        if (data.stats) {
+            this.updateStats(data.stats);
         }
+
+        if (data.files) {
+            this.updateFiles(data.files);
+        }
+
+        if (data.timeline_history) {
+            this.updateTimelineHistory(data.timeline_history);
+        }
+
+        this.showStatus('Ready', 'success');
     }
 
     setupVideoPreview() {

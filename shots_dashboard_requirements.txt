@@ -2,4 +2,6 @@
 # Install with: uv pip install -r shots_dashboard_requirements.txt
 
 flask>=3.0.0
+flask-socketio>=5.3.0
+python-socketio>=5.11.0
 opentimelineio>=0.16.0
