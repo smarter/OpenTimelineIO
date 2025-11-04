@@ -19,6 +19,7 @@ try:
     from .database import Database, DatabaseError
     from .models import FileState, TrackerState
     from .timeline_tracker import TimelineTracker
+    from .timeline_watcher import TimelineWatcher
     from .video_transcoder import (
         is_web_compatible,
         check_ffmpeg_available,
@@ -29,6 +30,7 @@ except ImportError:
     from database import Database, DatabaseError
     from models import FileState, TrackerState
     from timeline_tracker import TimelineTracker
+    from timeline_watcher import TimelineWatcher
     from video_transcoder import (
         is_web_compatible,
         check_ffmpeg_available,
@@ -37,12 +39,13 @@ except ImportError:
     )
 
 
-def create_app(db_path: Path | None = None) -> tuple[Flask, SocketIO]:
+def create_app(db_path: Path | None = None, watch_dir: Path | None = None) -> tuple[Flask, SocketIO]:
     """
     Application factory for creating Flask app with SocketIO.
 
     Args:
         db_path: Path to database file (for testing)
+        watch_dir: Optional directory to watch for .otio files
 
     Returns:
         Tuple of (Flask application, SocketIO instance)
@@ -469,6 +472,28 @@ def create_app(db_path: Path | None = None) -> tuple[Flask, SocketIO]:
         """Handle explicit state request from client."""
         emit_state_update('state_update')
 
+    # Set up file watcher if watch_dir is provided
+    if watch_dir:
+        def on_timeline_file_detected(timeline_path: Path) -> None:
+            """Handle new or modified timeline file."""
+            try:
+                print(f"📝 Detected timeline file: {timeline_path.name}")
+                tracker = get_tracker()
+                transitions = tracker.update_from_timeline(timeline_path)
+                save_tracker(tracker)
+
+                # Emit state update
+                emit_state_update('timeline_update_complete')
+
+                print(f"   ✓ Updated from {timeline_path.name}")
+                print(f"   {len(transitions)} state transitions")
+            except Exception as e:
+                print(f"   ✗ Error processing {timeline_path.name}: {e}")
+
+        watcher = TimelineWatcher(watch_dir, on_timeline_file_detected)
+        watcher.start()
+        app.timeline_watcher = watcher  # Store on app for cleanup
+
     return app, socketio
 
 
@@ -500,6 +525,12 @@ def main() -> None:
         default="0.0.0.0",
         help="Host to bind to (default: 0.0.0.0)"
     )
+    parser.add_argument(
+        "--watch-dir",
+        type=Path,
+        default=None,
+        help="Directory to watch for .otio timeline files"
+    )
 
     args = parser.parse_args()
 
@@ -519,7 +550,7 @@ def main() -> None:
 
     else:
         # Normal mode
-        app, socketio = create_app()
+        app, socketio = create_app(watch_dir=args.watch_dir)
 
     print("Starting Shots Dashboard...")
     print(f"Database: {app.config['DATABASE_PATH']}")
