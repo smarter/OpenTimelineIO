@@ -155,10 +155,52 @@ class ShotsDashboard {
     }
 
     updateStats(stats) {
-        document.getElementById('stat-total').textContent = stats.total;
-        document.getElementById('stat-new').textContent = stats.new;
-        document.getElementById('stat-in-use').textContent = stats.in_use;
-        document.getElementById('stat-removed').textContent = stats.removed;
+        // Animate stat values when they change
+        this.animateStatValue('stat-total', stats.total);
+        this.animateStatValue('stat-new', stats.new);
+        this.animateStatValue('stat-in-use', stats.in_use);
+        this.animateStatValue('stat-removed', stats.removed);
+    }
+
+    animateStatValue(elementId, newValue) {
+        const element = document.getElementById(elementId);
+        const oldValue = parseInt(element.textContent) || 0;
+
+        if (oldValue !== newValue) {
+            // Add animation class
+            element.classList.add('updated');
+
+            // Animate number counting
+            const duration = 500; // ms
+            const steps = 20;
+            const stepValue = (newValue - oldValue) / steps;
+            const stepDuration = duration / steps;
+            let currentStep = 0;
+
+            const interval = setInterval(() => {
+                currentStep++;
+                if (currentStep >= steps) {
+                    element.textContent = newValue;
+                    clearInterval(interval);
+                } else {
+                    element.textContent = Math.round(oldValue + (stepValue * currentStep));
+                }
+            }, stepDuration);
+
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                element.classList.remove('updated');
+            }, 600);
+
+            // Pulse the stat card
+            const card = element.closest('.stat-card');
+            if (card) {
+                card.classList.add('updated');
+                setTimeout(() => card.classList.remove('updated'), 800);
+            }
+        } else {
+            element.textContent = newValue;
+        }
     }
 
     updateFiles(files) {
@@ -171,6 +213,13 @@ class ShotsDashboard {
         const container = document.getElementById(containerId);
         const countEl = document.getElementById(countId);
 
+        // Get existing file paths to detect new ones
+        const existingPaths = new Set(
+            Array.from(container.querySelectorAll('.file-item')).map(item =>
+                item.querySelector('.file-path').textContent
+            )
+        );
+
         countEl.textContent = files.length;
 
         if (files.length === 0) {
@@ -178,13 +227,17 @@ class ShotsDashboard {
             return;
         }
 
-        container.innerHTML = files.map(file => `
-            <div class="file-item">
-                <div class="file-name" data-filename="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
-                <div class="file-path">${this.escapeHtml(file.path)}</div>
-                <div class="file-time">${this.formatTime(file.last_updated)}</div>
-            </div>
-        `).join('');
+        container.innerHTML = files.map(file => {
+            const isNew = !existingPaths.has(file.path);
+            const newItemClass = isNew ? 'new-item' : '';
+            return `
+                <div class="file-item ${newItemClass}">
+                    <div class="file-name" data-filename="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
+                    <div class="file-path">${this.escapeHtml(file.path)}</div>
+                    <div class="file-time">${this.formatTime(file.last_updated)}</div>
+                </div>
+            `;
+        }).join('');
 
         // Attach preview handlers to file names
         container.querySelectorAll('.file-name').forEach(el => {
@@ -193,6 +246,10 @@ class ShotsDashboard {
                 this.attachPreviewHandlers(el, filename);
             }
         });
+
+        // Flash the container to indicate update
+        container.classList.add('updated');
+        setTimeout(() => container.classList.remove('updated'), 800);
     }
 
     showTransitions(transitions) {
@@ -205,7 +262,7 @@ class ShotsDashboard {
         const html = transitions.map(t => {
             const oldState = t.old_state || 'none';
             return `
-                <div class="transition-item">
+                <div class="transition-item new-transition">
                     <div class="transition-text">
                         <strong>${this.escapeHtml(t.name)}</strong>
                         <span class="transition-arrow">→</span>
@@ -217,6 +274,13 @@ class ShotsDashboard {
         }).join('');
 
         container.innerHTML = html + container.innerHTML;
+
+        // Remove animation class after animation completes
+        setTimeout(() => {
+            container.querySelectorAll('.transition-item').forEach(item => {
+                item.classList.remove('new-transition');
+            });
+        }, 500);
 
         // Keep only last 20 transitions
         const items = container.querySelectorAll('.transition-item');
@@ -286,6 +350,14 @@ class ShotsDashboard {
         const currentInfo = document.getElementById('timeline-current-info');
         const currentClips = document.getElementById('timeline-current-clips');
         const historicalClips = document.getElementById('timeline-historical-clips');
+        const timelineWidget = document.getElementById('timeline-widget');
+
+        // Get existing clips to detect new ones
+        const existingCurrentClips = new Set(
+            Array.from(currentClips.querySelectorAll('.clip-badge')).map(badge =>
+                badge.getAttribute('data-filename')
+            )
+        );
 
         // Update current timeline
         if (history.current) {
@@ -300,9 +372,11 @@ class ShotsDashboard {
             `;
 
             if (history.current.clips.length > 0) {
-                currentClips.innerHTML = history.current.clips.map(clip =>
-                    `<span class="clip-badge" data-filename="${this.escapeHtml(clip)}">${this.escapeHtml(clip)}</span>`
-                ).join('');
+                currentClips.innerHTML = history.current.clips.map(clip => {
+                    const isNewClip = !existingCurrentClips.has(clip);
+                    const newClipClass = isNewClip ? 'new-clip' : '';
+                    return `<span class="clip-badge ${newClipClass}" data-filename="${this.escapeHtml(clip)}">${this.escapeHtml(clip)}</span>`;
+                }).join('');
 
                 // Attach preview handlers
                 currentClips.querySelectorAll('.clip-badge').forEach(el => {
@@ -311,9 +385,20 @@ class ShotsDashboard {
                         this.attachPreviewHandlers(el, filename);
                     }
                 });
+
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    currentClips.querySelectorAll('.clip-badge').forEach(badge => {
+                        badge.classList.remove('new-clip');
+                    });
+                }, 400);
             } else {
                 currentClips.innerHTML = '<p class="empty-state">No clips in timeline</p>';
             }
+
+            // Animate the timeline widget
+            timelineWidget.classList.add('updated');
+            setTimeout(() => timelineWidget.classList.remove('updated'), 1000);
         } else {
             currentInfo.innerHTML = '<p class="empty-state">No timeline loaded yet</p>';
             currentClips.innerHTML = '';

@@ -606,3 +606,237 @@ input[type="text"]:focus {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent-secondary);
 }
+
+/* ========================================
+   ANIMATIONS FOR REAL-TIME UPDATES
+   ======================================== */
+
+/* Fade in animation for new items */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Slide in from right for moving items */
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Pulse effect for updated sections */
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(233, 69, 96, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(233, 69, 96, 0);
+    }
+}
+
+/* Highlight flash effect */
+@keyframes highlightFlash {
+    0% {
+        background-color: var(--bg-card);
+    }
+    50% {
+        background-color: rgba(233, 69, 96, 0.3);
+    }
+    100% {
+        background-color: var(--bg-card);
+    }
+}
+
+/* Number counting/scaling effect */
+@keyframes numberPop {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.3);
+        color: var(--accent-primary);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Bounce effect for stats */
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* Glow effect */
+@keyframes glow {
+    0% {
+        box-shadow: 0 0 5px rgba(233, 69, 96, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(233, 69, 96, 0.8), 0 0 30px rgba(233, 69, 96, 0.4);
+    }
+    100% {
+        box-shadow: 0 0 5px rgba(233, 69, 96, 0.5);
+    }
+}
+
+/* Shake effect for transitions */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+/* ========================================
+   ANIMATION CLASSES
+   ======================================== */
+
+/* Apply to new file items */
+.file-item.new-item {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+/* Apply to stats when they change */
+.stat-value.updated {
+    animation: numberPop 0.6s ease-out;
+}
+
+/* Apply to entire stat card when updated */
+.stat-card.updated {
+    animation: pulse 0.8s ease-out;
+}
+
+/* Apply to file lists when updated */
+.files.updated {
+    animation: highlightFlash 0.8s ease-out;
+}
+
+/* Apply to timeline widget when updated */
+.timeline-widget.updated {
+    animation: glow 1s ease-out;
+}
+
+/* Apply to transition items */
+.transition-item.new-transition {
+    animation: slideInRight 0.5s ease-out;
+}
+
+/* Apply to clip badges when they appear */
+.clip-badge.new-clip {
+    animation: fadeIn 0.4s ease-out;
+}
+
+/* State-specific animations */
+.file-item.state-new {
+    border-left: 3px solid var(--info);
+}
+
+.file-item.state-in-use {
+    border-left: 3px solid var(--success);
+}
+
+.file-item.state-removed {
+    border-left: 3px solid var(--danger);
+}
+
+/* Transition animations when state changes */
+.file-item.transitioning {
+    animation: shake 0.5s ease-out;
+}
+
+/* Smooth transitions for all animated properties */
+.stat-value,
+.file-item,
+.clip-badge,
+.timeline-widget {
+    transition: all 0.3s ease;
+}
+
+/* Auto-refresh indicator pulse */
+.pulse-dot {
+    animation: pulse 2s infinite;
+}
+
+/* Enhanced hover states with animations */
+.file-name:hover,
+.clip-badge:hover {
+    transform: translateX(3px);
+    transition: transform 0.2s ease;
+}
+
+/* Loading state animations */
+.loading-indicator {
+    animation: bounce 1s infinite;
+}
+
+/* Success flash for operations */
+@keyframes successFlash {
+    0% {
+        background-color: var(--bg-card);
+    }
+    50% {
+        background-color: rgba(46, 204, 113, 0.3);
+    }
+    100% {
+        background-color: var(--bg-card);
+    }
+}
+
+.operation-success {
+    animation: successFlash 0.6s ease-out;
+}
+
+/* Error flash for operations */
+@keyframes errorFlash {
+    0% {
+        background-color: var(--bg-card);
+    }
+    50% {
+        background-color: rgba(231, 76, 60, 0.3);
+    }
+    100% {
+        background-color: var(--bg-card);
+    }
+}
+
+.operation-error {
+    animation: errorFlash 0.6s ease-out;
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
