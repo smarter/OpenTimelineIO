@@ -91,7 +91,34 @@ def run_visual_demo(
     interpreter = FileSystemInterpreter(db_path)
 
     try:
-        result = interpreter.execute(scenario)
+        # Execute actions one by one with delays
+        print("\nExecuting actions with 3-second delays between each step...")
+        print("(Watch the browser to see changes in real-time)\n")
+
+        for i, action in enumerate(scenario.actions, 1):
+            print(f"[{i}/{len(scenario.actions)}] {action.__class__.__name__}: {action}")
+            interpreter._execute_action(action)
+
+            # Save state after each action so UI updates
+            interpreter.db.save(interpreter.tracker.state)
+
+            # Delay so user can see the change
+            if i < len(scenario.actions):
+                print("   Waiting 3 seconds for you to see the changes...")
+                time.sleep(3)
+
+        # Get final result
+        result = {
+            "success": True,
+            "final_state": {
+                "stats": interpreter.tracker.get_stats(),
+                "files": {
+                    "new": [{"path": str(f.path), "name": f.path.name} for f in interpreter.tracker.state.new_files],
+                    "in_use": [{"path": str(f.path), "name": f.path.name} for f in interpreter.tracker.state.in_use_files],
+                    "removed": [{"path": str(f.path), "name": f.path.name} for f in interpreter.tracker.state.removed_files],
+                }
+            }
+        }
 
         print("\n" + "=" * 70)
         print("SCENARIO COMPLETE!")
