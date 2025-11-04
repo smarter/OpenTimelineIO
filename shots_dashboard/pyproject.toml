@@ -8,6 +8,8 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0.0",
+    "flask-socketio>=5.3.0",
+    "python-socketio>=5.11.0",
     "opentimelineio>=0.16.0",
 ]
 
@@ -15,16 +17,22 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
+    "pytest-playwright>=0.4.0",
+    "playwright>=1.40.0",
+    "hypothesis>=6.92.0",
     "basedpyright>=1.10.0",
 ]
 
 [project.scripts]
-shots-dashboard = "shots_dashboard.app:main"
+shots-dashboard = "app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.10"
-include = ["shots_dashboard", "tests"]
+include = ["."]
 exclude = [
     "**/__pycache__",
     "**/node_modules",
