@@ -32,15 +32,23 @@ def run_visual_demo(
     demo_dir: Path,
     db_path: Path,
     port: int = 5000,
-    scenario_name: str = "production"
+    scenario_name: str = "production",
+    auto_start: bool = False
 ) -> None:
     """
     Run visual demo mode.
 
     1. Start Flask server in background
-    2. Wait for user to open browser
+    2. Wait for user to open browser (unless auto_start=True)
     3. Execute scenario with delays so user can watch
     4. Keep server running for exploration
+
+    Args:
+        demo_dir: Directory for demo files
+        db_path: Path to database file
+        port: Port for web server
+        scenario_name: Name of scenario to run
+        auto_start: Skip waiting for ENTER, start immediately
     """
     # Ensure ffmpeg is in PATH for video generation
     local_bin = os.path.expanduser('~/.local/bin')
@@ -53,6 +61,9 @@ def run_visual_demo(
 
     # Create demo directory
     demo_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"\n📁 Demo files will be created in: {demo_dir}")
+    print(f"📁 Media files location: {demo_dir / 'media'}")
 
     # Start server in background
     print(f"\n1. Starting web server on http://localhost:{port}...")
@@ -70,16 +81,21 @@ def run_visual_demo(
     print("SERVER READY!")
     print("=" * 70)
     print(f"\n🌐 Open your browser to: http://localhost:{port}")
-    print("\nThe dashboard will auto-refresh every 2 seconds.")
-    print("You'll see changes happen in real-time as the scenario executes.")
-    print("\nPress ENTER when you're ready to start the scenario...")
+    print("\nThe dashboard updates in real-time via WebSocket.")
+    print("You'll see changes instantly as the scenario executes.")
 
-    try:
-        input()
-    except KeyboardInterrupt:
-        print("\n\nCancelled by user.")
-        server_process.terminate()
-        sys.exit(0)
+    if not auto_start:
+        print("\nPress ENTER when you're ready to start the scenario...")
+
+        try:
+            input()
+        except KeyboardInterrupt:
+            print("\n\nCancelled by user.")
+            server_process.terminate()
+            sys.exit(0)
+    else:
+        print("\n🚀 Auto-starting scenario in 2 seconds...")
+        time.sleep(2)
 
     # Get scenario
     if scenario_name in STANDARD_SCENARIOS:

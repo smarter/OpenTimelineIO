@@ -485,6 +485,11 @@ def main() -> None:
         help="Run in demo mode with sample data and automated scenarios"
     )
     parser.add_argument(
+        "--auto-start",
+        action="store_true",
+        help="Auto-start demo scenario without waiting for ENTER (only with --demo)"
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=5000,
@@ -509,7 +514,7 @@ def main() -> None:
         demo_dir = Path.home() / ".shots_dashboard" / "demo"
         db_path = demo_dir / "demo_state.json"
 
-        run_visual_demo(demo_dir, db_path, args.port)
+        run_visual_demo(demo_dir, db_path, args.port, auto_start=args.auto_start)
         return  # Visual demo handles its own server
 
     else:
