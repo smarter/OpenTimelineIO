@@ -7,6 +7,7 @@ Users can watch the dashboard update in real-time as scenarios execute.
 from __future__ import annotations
 
 import multiprocessing
+import os
 import sys
 import time
 from pathlib import Path
@@ -41,6 +42,11 @@ def run_visual_demo(
     3. Execute scenario with delays so user can watch
     4. Keep server running for exploration
     """
+    # Ensure ffmpeg is in PATH for video generation
+    local_bin = os.path.expanduser('~/.local/bin')
+    if local_bin not in os.environ.get('PATH', ''):
+        os.environ['PATH'] = f"{local_bin}:{os.environ.get('PATH', '')}"
+
     print("\n" + "🎬" * 35)
     print(" " * 15 + "VISUAL DEMO MODE")
     print("🎬" * 35)

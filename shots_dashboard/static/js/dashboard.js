@@ -426,7 +426,11 @@ class ShotsDashboard {
 
         this.previewPopup.style.display = 'none';
         this.previewPlayer.pause();
+
+        // Clear the video source to stop any loading/downloading
         this.previewSource.src = '';
+        this.previewPlayer.load(); // Trigger load with empty source to stop network activity
+
         this.currentPreviewFilename = null;
         this.previewPopup.classList.remove('loading');
     }
