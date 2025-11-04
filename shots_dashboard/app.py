@@ -536,7 +536,6 @@ def main() -> None:
 
     if args.demo:
         # Run visual demo mode (server + scenario playback)
-        from pathlib import Path
         try:
             from demo_visual import run_visual_demo
         except ImportError:
