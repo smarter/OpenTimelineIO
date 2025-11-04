@@ -71,9 +71,13 @@ def simple_scenario_strategy(draw):
     """Generate a simple scenario with file operations."""
     base_dir = Path("test")
 
-    # Generate 1-5 files
-    num_files = draw(st.integers(min_value=1, max_value=5))
-    files = [draw(create_file_action(base_dir)) for _ in range(num_files)]
+    # Generate 1-5 unique files
+    files = draw(st.lists(
+        create_file_action(base_dir),
+        min_size=1,
+        max_size=5,
+        unique_by=lambda f: f.path
+    ))
 
     # Scan directory
     scan = ScanDirectory(base_dir / "media")
@@ -81,11 +85,34 @@ def simple_scenario_strategy(draw):
     # Optionally create a timeline
     create_timeline = None
     update_timeline = None
-    if draw(st.booleans()):
+    if draw(st.booleans()) and len(files) > 0:
         file_paths = [f.path for f in files]
-        timeline_action = draw(create_timeline_action(base_dir, file_paths))
-        create_timeline = timeline_action
-        update_timeline = UpdateFromTimeline(timeline_action.path)
+        # Only sample from files if we have enough unique ones
+        num_clips = draw(st.integers(min_value=0, max_value=min(5, len(file_paths))))
+        if num_clips > len(file_paths):
+            num_clips = len(file_paths)
+
+        # Manually select unique files to avoid the issue
+        if num_clips > 0:
+            indices = draw(st.lists(
+                st.integers(min_value=0, max_value=len(file_paths)-1),
+                min_size=num_clips,
+                max_size=num_clips,
+                unique=True
+            ))
+            selected_files = [file_paths[i] for i in indices]
+        else:
+            selected_files = []
+
+        timeline_name = draw(st.text(
+            alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd")),
+            min_size=1,
+            max_size=10
+        ))
+
+        clip_names = tuple(f.name for f in selected_files)
+        create_timeline = CreateTimeline(base_dir / f"{timeline_name}.otio", clip_names)
+        update_timeline = UpdateFromTimeline(create_timeline.path)
 
     # Build action list
     actions = files + [scan]
