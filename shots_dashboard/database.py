@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .models import FileRecord, FileState, TrackerState
+    from .models import FileRecord, FileState, TrackerState, TimelineHistory, TimelineSnapshot
 except ImportError:
-    from models import FileRecord, FileState, TrackerState
+    from models import FileRecord, FileState, TrackerState, TimelineHistory, TimelineSnapshot
 
 
 class DatabaseError(Exception):
@@ -40,7 +40,11 @@ class Database:
             self._write_raw({
                 "files": {},
                 "timeline_path": None,
-                "last_scan": None
+                "last_scan": None,
+                "timeline_history": {
+                    "snapshots": [],
+                    "max_snapshots": 50
+                }
             })
 
     def _write_raw(self, data: dict[str, Any]) -> None:
@@ -79,7 +83,18 @@ class Database:
                 for path, record in state.files.items()
             },
             "timeline_path": str(state.timeline_path) if state.timeline_path else None,
-            "last_scan": state.last_scan.isoformat() if state.last_scan else None
+            "last_scan": state.last_scan.isoformat() if state.last_scan else None,
+            "timeline_history": {
+                "snapshots": [
+                    {
+                        "timestamp": snapshot.timestamp.isoformat(),
+                        "timeline_path": str(snapshot.timeline_path),
+                        "clip_names": list(snapshot.clip_names)
+                    }
+                    for snapshot in state.timeline_history.snapshots
+                ],
+                "max_snapshots": state.timeline_history.max_snapshots
+            }
         }
         self._write_raw(data)
 
@@ -121,6 +136,27 @@ class Database:
             if data.get("last_scan"):
                 state.last_scan = datetime.fromisoformat(data["last_scan"])
 
+            # Load timeline history
+            if data.get("timeline_history"):
+                history_data = data["timeline_history"]
+                snapshots = []
+                for snapshot_data in history_data.get("snapshots", []):
+                    try:
+                        snapshot = TimelineSnapshot(
+                            timestamp=datetime.fromisoformat(snapshot_data["timestamp"]),
+                            timeline_path=Path(snapshot_data["timeline_path"]),
+                            clip_names=tuple(snapshot_data["clip_names"])
+                        )
+                        snapshots.append(snapshot)
+                    except (KeyError, ValueError) as e:
+                        print(f"Warning: Skipping invalid timeline snapshot: {e}")
+                        continue
+
+                state.timeline_history = TimelineHistory(
+                    snapshots=tuple(snapshots),
+                    max_snapshots=history_data.get("max_snapshots", 50)
+                )
+
             return state
 
         except Exception as e:
@@ -131,5 +167,9 @@ class Database:
         self._write_raw({
             "files": {},
             "timeline_path": None,
-            "last_scan": None
+            "last_scan": None,
+            "timeline_history": {
+                "snapshots": [],
+                "max_snapshots": 50
+            }
         })

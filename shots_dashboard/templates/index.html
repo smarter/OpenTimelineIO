@@ -88,6 +88,32 @@
             </div>
         </div>
 
+        <div class="timeline-widget" id="timeline-widget">
+            <div class="timeline-widget-header">
+                <h3>📽️ Timeline Contents</h3>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="show-historical-toggle">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">Show Historical</span>
+                </label>
+            </div>
+
+            <div class="timeline-current" id="timeline-current">
+                <h4>Current Timeline</h4>
+                <div class="timeline-info" id="timeline-current-info">
+                    <p class="empty-state">No timeline loaded yet</p>
+                </div>
+                <div class="timeline-clips" id="timeline-current-clips"></div>
+            </div>
+
+            <div class="timeline-historical" id="timeline-historical" style="display: none;">
+                <h4>Previously in Timeline</h4>
+                <div class="timeline-clips" id="timeline-historical-clips">
+                    <p class="empty-state">No historical clips</p>
+                </div>
+            </div>
+        </div>
+
         <div class="transitions" id="transitions">
             <h3>Recent Changes</h3>
             <div id="transitions-list"></div>

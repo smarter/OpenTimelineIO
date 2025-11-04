@@ -14,9 +14,9 @@ from typing import Set
 import opentimelineio as otio
 
 try:
-    from .models import FileRecord, FileState, StateTransition, TrackerState
+    from .models import FileRecord, FileState, StateTransition, TrackerState, TimelineSnapshot
 except ImportError:
-    from models import FileRecord, FileState, StateTransition, TrackerState
+    from models import FileRecord, FileState, StateTransition, TrackerState, TimelineSnapshot
 
 
 class TimelineTracker:
@@ -189,6 +189,15 @@ class TimelineTracker:
                 ))
 
         self.state.timeline_path = timeline_path
+
+        # Record timeline snapshot for history tracking
+        snapshot = TimelineSnapshot(
+            timestamp=datetime.now(),
+            timeline_path=timeline_path,
+            clip_names=tuple(sorted(clip_names))  # Sorted for consistent ordering
+        )
+        self.state.timeline_history = self.state.timeline_history.add_snapshot(snapshot)
+
         return transitions
 
     def get_stats(self) -> dict[str, int]:

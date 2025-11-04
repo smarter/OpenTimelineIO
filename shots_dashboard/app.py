@@ -218,6 +218,47 @@ def create_app(db_path: Path | None = None) -> Flask:
                 "error": str(e)
             }), 500
 
+    @app.route('/api/timeline_history')
+    def api_timeline_history() -> tuple[Any, int]:
+        """
+        Get timeline history showing current and historical timeline contents.
+
+        Returns:
+            JSON with current timeline clips and historical clips
+        """
+        try:
+            tracker = get_tracker()
+            history = tracker.state.timeline_history
+
+            current_snapshot = history.get_current()
+            historical_snapshots = history.get_historical()
+            historical_clips = history.get_all_historical_clips()
+
+            return jsonify({
+                "success": True,
+                "current": {
+                    "timeline_path": str(current_snapshot.timeline_path) if current_snapshot else None,
+                    "timestamp": current_snapshot.timestamp.isoformat() if current_snapshot else None,
+                    "clips": list(current_snapshot.clip_names) if current_snapshot else []
+                } if current_snapshot else None,
+                "historical_clips": sorted(list(historical_clips)),
+                "snapshots": [
+                    {
+                        "timeline_path": str(snapshot.timeline_path),
+                        "timestamp": snapshot.timestamp.isoformat(),
+                        "clips": list(snapshot.clip_names),
+                        "clip_count": len(snapshot.clip_names)
+                    }
+                    for snapshot in historical_snapshots
+                ]
+            }), 200
+
+        except DatabaseError as e:
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
     @app.errorhandler(404)
     def not_found(e: Any) -> tuple[Any, int]:
         """Handle 404 errors."""

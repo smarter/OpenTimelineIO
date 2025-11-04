@@ -13,6 +13,11 @@ class ShotsDashboard {
         document.getElementById('update-btn').addEventListener('click', () => this.updateTimeline());
         document.getElementById('reset-btn').addEventListener('click', () => this.reset());
 
+        // Timeline history toggle
+        document.getElementById('show-historical-toggle').addEventListener('change', (e) => {
+            this.toggleHistoricalTimeline(e.target.checked);
+        });
+
         // Allow Enter key in inputs
         document.getElementById('scan-directory').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.scanDirectory();
@@ -26,20 +31,23 @@ class ShotsDashboard {
         try {
             this.showStatus('Loading...', 'info');
 
-            const [statusRes, filesRes] = await Promise.all([
+            const [statusRes, filesRes, timelineHistoryRes] = await Promise.all([
                 fetch('/api/status'),
-                fetch('/api/files')
+                fetch('/api/files'),
+                fetch('/api/timeline_history')
             ]);
 
             const status = await statusRes.json();
             const files = await filesRes.json();
+            const timelineHistory = await timelineHistoryRes.json();
 
-            if (status.success && files.success) {
+            if (status.success && files.success && timelineHistory.success) {
                 this.updateStats(status.stats);
                 this.updateFiles(files.files);
+                this.updateTimelineHistory(timelineHistory);
                 this.showStatus('Ready', 'success');
             } else {
-                throw new Error(status.error || files.error);
+                throw new Error(status.error || files.error || timelineHistory.error);
             }
         } catch (error) {
             this.showStatus(`Error: ${error.message}`, 'error');
@@ -261,6 +269,50 @@ class ShotsDashboard {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    updateTimelineHistory(history) {
+        const currentInfo = document.getElementById('timeline-current-info');
+        const currentClips = document.getElementById('timeline-current-clips');
+        const historicalClips = document.getElementById('timeline-historical-clips');
+
+        // Update current timeline
+        if (history.current) {
+            const path = history.current.timeline_path;
+            const filename = path ? path.split('/').pop() : 'Unknown';
+            const timestamp = history.current.timestamp ? this.formatTime(history.current.timestamp) : '';
+
+            currentInfo.innerHTML = `
+                <p><strong>${history.current.clips.length} clips</strong> in current timeline</p>
+                <p class="timeline-path">${this.escapeHtml(filename)}</p>
+                <p class="timeline-timestamp">Updated ${timestamp}</p>
+            `;
+
+            if (history.current.clips.length > 0) {
+                currentClips.innerHTML = history.current.clips.map(clip =>
+                    `<span class="clip-badge">${this.escapeHtml(clip)}</span>`
+                ).join('');
+            } else {
+                currentClips.innerHTML = '<p class="empty-state">No clips in timeline</p>';
+            }
+        } else {
+            currentInfo.innerHTML = '<p class="empty-state">No timeline loaded yet</p>';
+            currentClips.innerHTML = '';
+        }
+
+        // Update historical clips
+        if (history.historical_clips && history.historical_clips.length > 0) {
+            historicalClips.innerHTML = history.historical_clips.map(clip =>
+                `<span class="clip-badge historical">${this.escapeHtml(clip)}</span>`
+            ).join('');
+        } else {
+            historicalClips.innerHTML = '<p class="empty-state">No historical clips</p>';
+        }
+    }
+
+    toggleHistoricalTimeline(show) {
+        const historicalSection = document.getElementById('timeline-historical');
+        historicalSection.style.display = show ? 'block' : 'none';
     }
 
     startAutoRefresh() {

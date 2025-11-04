@@ -55,6 +55,79 @@ class FileRecord:
         )
 
 
+@dataclass(frozen=True)
+class TimelineSnapshot:
+    """
+    Immutable snapshot of which files were in a timeline at a specific point in time.
+
+    This allows us to track timeline history and show users which files
+    were previously in the timeline.
+    """
+    timestamp: datetime
+    timeline_path: Path
+    clip_names: tuple[str, ...]  # Immutable tuple of clip names in timeline
+
+    def __str__(self) -> str:
+        return f"Timeline '{self.timeline_path.name}' with {len(self.clip_names)} clips at {self.timestamp}"
+
+
+@dataclass(frozen=True)
+class TimelineHistory:
+    """
+    Immutable collection of timeline snapshots over time.
+
+    Maintains a history of timeline states, keeping only the most recent
+    snapshots up to max_snapshots limit. Being frozen ensures we create
+    new instances rather than mutating existing ones.
+    """
+    snapshots: tuple[TimelineSnapshot, ...] = field(default_factory=tuple)
+    max_snapshots: int = 50
+
+    def add_snapshot(self, snapshot: TimelineSnapshot) -> TimelineHistory:
+        """
+        Create a new TimelineHistory with an additional snapshot.
+
+        Keeps only the most recent max_snapshots entries. Most recent
+        snapshot is always at index 0.
+
+        Args:
+            snapshot: The new snapshot to add
+
+        Returns:
+            New TimelineHistory instance with the snapshot added
+        """
+        all_snapshots = (snapshot,) + self.snapshots
+        return TimelineHistory(
+            snapshots=all_snapshots[:self.max_snapshots],
+            max_snapshots=self.max_snapshots
+        )
+
+    def get_current(self) -> TimelineSnapshot | None:
+        """Get the most recent timeline snapshot."""
+        return self.snapshots[0] if self.snapshots else None
+
+    def get_historical(self) -> tuple[TimelineSnapshot, ...]:
+        """Get all historical snapshots (excluding the current one)."""
+        return self.snapshots[1:] if len(self.snapshots) > 1 else ()
+
+    def get_all_historical_clips(self) -> Set[str]:
+        """
+        Get set of all clip names that appeared in historical timelines.
+
+        Excludes clips from the current timeline to show only what
+        used to be in the timeline but isn't anymore.
+        """
+        current = self.get_current()
+        current_clips = set(current.clip_names) if current else set()
+
+        historical_clips = set()
+        for snapshot in self.get_historical():
+            historical_clips.update(snapshot.clip_names)
+
+        # Return only clips that were in history but not in current
+        return historical_clips - current_clips
+
+
 @dataclass
 class TrackerState:
     """
@@ -66,6 +139,7 @@ class TrackerState:
     files: dict[Path, FileRecord] = field(default_factory=dict)
     timeline_path: Path | None = None
     last_scan: datetime | None = None
+    timeline_history: TimelineHistory = field(default_factory=TimelineHistory)
 
     def get_files_by_state(self, state: FileState) -> list[FileRecord]:
         """Get all files in a specific state, sorted by path."""
