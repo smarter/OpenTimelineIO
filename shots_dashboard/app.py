@@ -528,7 +528,7 @@ def main() -> None:
     if args.demo:
         print("\n💡 Demo mode is active! Sample data has been created.")
 
-    socketio.run(app, debug=True, host=args.host, port=args.port)
+    socketio.run(app, debug=True, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
 
 
 if __name__ == '__main__':
