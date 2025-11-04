@@ -528,6 +528,67 @@ input[type="text"]:focus {
     border-color: #e74c3c;
 }
 
+/* Video Preview Popup */
+.video-preview-popup {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    background: var(--bg-card);
+    border: 2px solid var(--accent-primary);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    max-width: 400px;
+    max-height: 300px;
+}
+
+.video-preview-player {
+    width: 100%;
+    height: auto;
+    max-height: 250px;
+    display: block;
+    background: #000;
+}
+
+.video-preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.7);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.video-preview-filename {
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.8);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Show loading state */
+.video-preview-popup.loading .video-preview-loading {
+    display: block;
+}
+
+.video-preview-popup:not(.loading) .video-preview-loading {
+    display: none;
+}
+
+/* Hoverable items that can show previews */
+.file-name:hover,
+.clip-badge:hover {
+    cursor: pointer;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;

@@ -3,7 +3,10 @@
 class ShotsDashboard {
     constructor() {
         this.autoRefreshInterval = null;
+        this.previewTimeout = null;
+        this.currentPreviewFilename = null;
         this.setupEventListeners();
+        this.setupVideoPreview();
         this.loadData();
         this.startAutoRefresh();
     }
@@ -177,11 +180,19 @@ class ShotsDashboard {
 
         container.innerHTML = files.map(file => `
             <div class="file-item">
-                <div class="file-name">${this.escapeHtml(file.name)}</div>
+                <div class="file-name" data-filename="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
                 <div class="file-path">${this.escapeHtml(file.path)}</div>
                 <div class="file-time">${this.formatTime(file.last_updated)}</div>
             </div>
         `).join('');
+
+        // Attach preview handlers to file names
+        container.querySelectorAll('.file-name').forEach(el => {
+            const filename = el.getAttribute('data-filename');
+            if (filename) {
+                this.attachPreviewHandlers(el, filename);
+            }
+        });
     }
 
     showTransitions(transitions) {
@@ -290,8 +301,16 @@ class ShotsDashboard {
 
             if (history.current.clips.length > 0) {
                 currentClips.innerHTML = history.current.clips.map(clip =>
-                    `<span class="clip-badge">${this.escapeHtml(clip)}</span>`
+                    `<span class="clip-badge" data-filename="${this.escapeHtml(clip)}">${this.escapeHtml(clip)}</span>`
                 ).join('');
+
+                // Attach preview handlers
+                currentClips.querySelectorAll('.clip-badge').forEach(el => {
+                    const filename = el.getAttribute('data-filename');
+                    if (filename) {
+                        this.attachPreviewHandlers(el, filename);
+                    }
+                });
             } else {
                 currentClips.innerHTML = '<p class="empty-state">No clips in timeline</p>';
             }
@@ -303,8 +322,16 @@ class ShotsDashboard {
         // Update historical clips
         if (history.historical_clips && history.historical_clips.length > 0) {
             historicalClips.innerHTML = history.historical_clips.map(clip =>
-                `<span class="clip-badge historical">${this.escapeHtml(clip)}</span>`
+                `<span class="clip-badge historical" data-filename="${this.escapeHtml(clip)}">${this.escapeHtml(clip)}</span>`
             ).join('');
+
+            // Attach preview handlers
+            historicalClips.querySelectorAll('.clip-badge').forEach(el => {
+                const filename = el.getAttribute('data-filename');
+                if (filename) {
+                    this.attachPreviewHandlers(el, filename);
+                }
+            });
         } else {
             historicalClips.innerHTML = '<p class="empty-state">No historical clips</p>';
         }
@@ -327,6 +354,91 @@ class ShotsDashboard {
             clearInterval(this.autoRefreshInterval);
             this.autoRefreshInterval = null;
         }
+    }
+
+    setupVideoPreview() {
+        this.previewPopup = document.getElementById('video-preview-popup');
+        this.previewPlayer = document.getElementById('video-preview-player');
+        this.previewSource = document.getElementById('video-preview-source');
+        this.previewFilename = document.getElementById('video-preview-filename');
+    }
+
+    showVideoPreview(filename, element) {
+        // Cancel any pending preview
+        if (this.previewTimeout) {
+            clearTimeout(this.previewTimeout);
+        }
+
+        // Delay showing preview to avoid flickering on quick mouse movements
+        this.previewTimeout = setTimeout(() => {
+            this.currentPreviewFilename = filename;
+
+            // Show loading state
+            this.previewPopup.classList.add('loading');
+            this.previewFilename.textContent = filename;
+
+            // Position popup near the element
+            const rect = element.getBoundingClientRect();
+            const popupWidth = 400;
+            const popupHeight = 300;
+
+            // Position to the right of element, or left if not enough space
+            let left = rect.right + 10;
+            if (left + popupWidth > window.innerWidth) {
+                left = rect.left - popupWidth - 10;
+            }
+
+            // Position vertically centered with element
+            let top = rect.top + (rect.height / 2) - (popupHeight / 2);
+
+            // Keep within viewport
+            top = Math.max(10, Math.min(top, window.innerHeight - popupHeight - 10));
+            left = Math.max(10, Math.min(left, window.innerWidth - popupWidth - 10));
+
+            this.previewPopup.style.left = left + 'px';
+            this.previewPopup.style.top = top + 'px';
+            this.previewPopup.style.display = 'block';
+
+            // Load video
+            this.previewSource.src = `/api/preview/${encodeURIComponent(filename)}`;
+            this.previewPlayer.load();
+
+            // Start playing when loaded
+            this.previewPlayer.onloadeddata = () => {
+                this.previewPopup.classList.remove('loading');
+                this.previewPlayer.play().catch(err => {
+                    console.warn('Autoplay prevented:', err);
+                });
+            };
+
+            this.previewPlayer.onerror = () => {
+                console.error('Failed to load video preview');
+                this.hideVideoPreview();
+            };
+        }, 300); // 300ms delay
+    }
+
+    hideVideoPreview() {
+        if (this.previewTimeout) {
+            clearTimeout(this.previewTimeout);
+            this.previewTimeout = null;
+        }
+
+        this.previewPopup.style.display = 'none';
+        this.previewPlayer.pause();
+        this.previewSource.src = '';
+        this.currentPreviewFilename = null;
+        this.previewPopup.classList.remove('loading');
+    }
+
+    attachPreviewHandlers(element, filename) {
+        element.addEventListener('mouseenter', (e) => {
+            this.showVideoPreview(filename, element);
+        });
+
+        element.addEventListener('mouseleave', () => {
+            this.hideVideoPreview();
+        });
     }
 }
 

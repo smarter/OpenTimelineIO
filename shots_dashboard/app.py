@@ -11,17 +11,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context
 
 # Try relative imports first (when used as package), fall back to absolute
 try:
     from .database import Database, DatabaseError
     from .models import FileState, TrackerState
     from .timeline_tracker import TimelineTracker
+    from .video_transcoder import (
+        is_web_compatible,
+        check_ffmpeg_available,
+        stream_transcode_webm,
+        TranscodingError
+    )
 except ImportError:
     from database import Database, DatabaseError
     from models import FileState, TrackerState
     from timeline_tracker import TimelineTracker
+    from video_transcoder import (
+        is_web_compatible,
+        check_ffmpeg_available,
+        stream_transcode_webm,
+        TranscodingError
+    )
 
 
 def create_app(db_path: Path | None = None) -> Flask:
@@ -254,6 +266,96 @@ def create_app(db_path: Path | None = None) -> Flask:
             }), 200
 
         except DatabaseError as e:
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
+    @app.route('/api/preview/<path:filename>')
+    def api_preview(filename: str) -> Response | tuple[Any, int]:
+        """
+        Serve video clip preview with on-the-fly transcoding if needed.
+
+        For web-compatible formats (mp4, webm, ogg), serves file directly.
+        For other formats, transcodes to WebM (VP8/Vorbis) in real-time.
+
+        Args:
+            filename: Name of the clip file to preview
+
+        Returns:
+            Video stream (WebM format)
+        """
+        try:
+            tracker = get_tracker()
+
+            # Find file in tracked files
+            file_path = None
+            for record in tracker.state.files.values():
+                if record.path.name == filename:
+                    file_path = record.path
+                    break
+
+            if file_path is None or not file_path.exists():
+                return jsonify({
+                    "success": False,
+                    "error": f"File not found: {filename}"
+                }), 404
+
+            # Check if web-compatible
+            if is_web_compatible(file_path):
+                # Serve directly
+                def generate():
+                    with open(file_path, 'rb') as f:
+                        while chunk := f.read(8192):
+                            yield chunk
+
+                return Response(
+                    stream_with_context(generate()),
+                    mimetype='video/webm' if file_path.suffix == '.webm' else 'video/mp4',
+                    headers={
+                        'Accept-Ranges': 'bytes',
+                        'Content-Type': 'video/webm' if file_path.suffix == '.webm' else 'video/mp4'
+                    }
+                )
+
+            # Check if ffmpeg is available
+            if not check_ffmpeg_available():
+                return jsonify({
+                    "success": False,
+                    "error": "Video transcoding not available (ffmpeg not installed)"
+                }), 503
+
+            # Transcode on-the-fly to WebM
+            try:
+                process = stream_transcode_webm(file_path)
+
+                def generate():
+                    try:
+                        while True:
+                            chunk = process.stdout.read(8192)
+                            if not chunk:
+                                break
+                            yield chunk
+                    finally:
+                        process.terminate()
+                        process.wait()
+
+                return Response(
+                    stream_with_context(generate()),
+                    mimetype='video/webm',
+                    headers={
+                        'Content-Type': 'video/webm',
+                        'Cache-Control': 'no-cache'
+                    }
+                )
+
+            except TranscodingError as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"Transcoding failed: {str(e)}"
+                }), 500
+
+        except Exception as e:
             return jsonify({
                 "success": False,
                 "error": str(e)

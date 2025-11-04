@@ -118,6 +118,16 @@
             <h3>Recent Changes</h3>
             <div id="transitions-list"></div>
         </div>
+
+        <!-- Video Preview Popup -->
+        <div id="video-preview-popup" class="video-preview-popup" style="display: none;">
+            <video id="video-preview-player" class="video-preview-player" muted loop playsinline>
+                <source id="video-preview-source" type="video/webm">
+                Your browser does not support video playback.
+            </video>
+            <div class="video-preview-loading">Loading...</div>
+            <div class="video-preview-filename" id="video-preview-filename"></div>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
