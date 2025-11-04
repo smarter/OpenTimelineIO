@@ -24,6 +24,7 @@ try:
         CreateTimeline, Scenario, ScanDirectory, UpdateFromTimeline, Wait
     )
     from .timeline_tracker import TimelineTracker
+    from .video_transcoder import generate_test_video, check_ffmpeg_available
 except ImportError:
     from database import Database
     from models import FileRecord, FileState, TrackerState
@@ -32,6 +33,7 @@ except ImportError:
         CreateTimeline, Scenario, ScanDirectory, UpdateFromTimeline, Wait
     )
     from timeline_tracker import TimelineTracker
+    from video_transcoder import generate_test_video, check_ffmpeg_available
 
 
 class AssertionError(Exception):
@@ -267,8 +269,45 @@ class FileSystemInterpreter:
     def _create_file(self, action: CreateFile) -> None:
         """Actually create a file."""
         action.path.parent.mkdir(parents=True, exist_ok=True)
-        action.path.touch()
-        self.log.append(f"Created file: {action.path}")
+
+        # Check if this is a video/audio file
+        video_extensions = {'.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v', '.mxf'}
+        audio_extensions = {'.wav', '.mp3', '.aac', '.flac', '.ogg', '.m4a'}
+
+        ext = action.path.suffix.lower()
+
+        if ext in video_extensions and check_ffmpeg_available():
+            # Generate actual video content
+            try:
+                generate_test_video(action.path, duration=5)
+                self.log.append(f"Created video file: {action.path}")
+            except Exception as e:
+                # Fallback to empty file if video generation fails
+                action.path.touch()
+                self.log.append(f"Created file (video generation failed): {action.path}")
+        elif ext in audio_extensions and check_ffmpeg_available():
+            # Generate actual audio content
+            try:
+                # Generate audio-only file with sine wave
+                import subprocess
+                command = [
+                    'ffmpeg',
+                    '-f', 'lavfi',
+                    '-i', 'sine=frequency=440:duration=5',
+                    '-c:a', 'aac' if ext in {'.mp4', '.m4a', '.aac'} else 'libvorbis',
+                    '-y',
+                    str(action.path)
+                ]
+                subprocess.run(command, check=True, capture_output=True)
+                self.log.append(f"Created audio file: {action.path}")
+            except Exception as e:
+                # Fallback to empty file if audio generation fails
+                action.path.touch()
+                self.log.append(f"Created file (audio generation failed): {action.path}")
+        else:
+            # Create empty file for non-media files or if ffmpeg unavailable
+            action.path.touch()
+            self.log.append(f"Created file: {action.path}")
 
     def _create_timeline(self, action: CreateTimeline) -> None:
         """Actually create an OTIO timeline."""

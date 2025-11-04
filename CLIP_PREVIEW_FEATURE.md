@@ -302,6 +302,31 @@ stream_transcode_webm(input_path, bitrate="300k")  # Was 500k
 - Multiple simultaneous previews = high CPU usage
 - Consider limiting concurrent transcodes
 
+## Demo Mode with Real Videos
+
+When running in demo mode (`python -m shots_dashboard --demo`), the system now automatically generates real video files using ffmpeg instead of creating empty placeholder files.
+
+### Real Video Generation
+
+**When ffmpeg is available**:
+- Creates actual video files with test patterns and audio
+- Videos are 5 seconds long with 640x480 resolution
+- Includes visual test pattern and 1000 Hz sine wave audio
+- Files can be previewed with the clip preview feature
+
+**When ffmpeg is not available**:
+- Gracefully falls back to creating empty files
+- Demo still works, but videos cannot be previewed
+- Install ffmpeg to enable full functionality
+
+### Video File Formats
+
+The demo generates videos in the format specified by file extension:
+- **`.mp4`**: H.264/AAC (web-compatible, no transcoding needed)
+- **`.mov`**: H.264/AAC (requires transcoding to WebM)
+- **`.webm`**: VP8/Vorbis (web-compatible, no transcoding needed)
+- **Other formats**: Generated with appropriate codecs based on extension
+
 ## Testing
 
 ### Unit Tests
