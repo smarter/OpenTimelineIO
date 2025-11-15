@@ -14,21 +14,9 @@ class ShotsDashboard {
     }
 
     setupEventListeners() {
-        document.getElementById('scan-btn').addEventListener('click', () => this.scanDirectory());
-        document.getElementById('update-btn').addEventListener('click', () => this.updateTimeline());
-        document.getElementById('reset-btn').addEventListener('click', () => this.reset());
-
         // Timeline history toggle
         document.getElementById('show-historical-toggle').addEventListener('change', (e) => {
             this.toggleHistoricalTimeline(e.target.checked);
-        });
-
-        // Allow Enter key in inputs
-        document.getElementById('scan-directory').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.scanDirectory();
-        });
-        document.getElementById('timeline-path').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.updateTimeline();
         });
     }
 
@@ -47,7 +35,6 @@ class ShotsDashboard {
             const timelineHistory = await timelineHistoryRes.json();
 
             if (status.success && files.success && timelineHistory.success) {
-                this.updateStats(status.stats);
                 this.updateFiles(files.files);
                 this.updateTimelineHistory(timelineHistory);
                 this.showStatus('Ready', 'success');
@@ -57,111 +44,6 @@ class ShotsDashboard {
         } catch (error) {
             this.showStatus(`Error: ${error.message}`, 'error');
         }
-    }
-
-    async scanDirectory() {
-        const directory = document.getElementById('scan-directory').value.trim();
-        if (!directory) {
-            this.showStatus('Please enter a directory path', 'error');
-            return;
-        }
-
-        try {
-            this.showStatus('Scanning directory...', 'info');
-            this.disableButtons();
-
-            const response = await fetch('/api/scan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ directory })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showStatus(result.message, 'success');
-                this.updateStats(result.stats);
-                this.showTransitions(result.transitions);
-                await this.loadData();
-            } else {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            this.showStatus(`Error: ${error.message}`, 'error');
-        } finally {
-            this.enableButtons();
-        }
-    }
-
-    async updateTimeline() {
-        const timelinePath = document.getElementById('timeline-path').value.trim();
-        if (!timelinePath) {
-            this.showStatus('Please enter a timeline path', 'error');
-            return;
-        }
-
-        try {
-            this.showStatus('Updating from timeline...', 'info');
-            this.disableButtons();
-
-            const response = await fetch('/api/update_timeline', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timeline_path: timelinePath })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showStatus(result.message, 'success');
-                this.updateStats(result.stats);
-                this.showTransitions(result.transitions);
-                await this.loadData();
-            } else {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            this.showStatus(`Error: ${error.message}`, 'error');
-        } finally {
-            this.enableButtons();
-        }
-    }
-
-    async reset() {
-        if (!confirm('Are you sure you want to reset all state? This cannot be undone.')) {
-            return;
-        }
-
-        try {
-            this.showStatus('Resetting...', 'info');
-            this.disableButtons();
-
-            const response = await fetch('/api/reset', {
-                method: 'POST'
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showStatus(result.message, 'success');
-                await this.loadData();
-                document.getElementById('transitions-list').innerHTML = '';
-            } else {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            this.showStatus(`Error: ${error.message}`, 'error');
-        } finally {
-            this.enableButtons();
-        }
-    }
-
-    updateStats(stats) {
-        document.getElementById('stat-total').textContent = stats.total;
-        document.getElementById('stat-new').textContent = stats.new;
-        document.getElementById('stat-in-use').textContent = stats.in_use;
-        document.getElementById('stat-newer-project').textContent = stats.newer_project || 0;
-        document.getElementById('stat-removed').textContent = stats.removed;
     }
 
     updateFiles(files) {
@@ -243,18 +125,6 @@ class ShotsDashboard {
         } else if (type === 'error') {
             statusBar.classList.add('error');
         }
-    }
-
-    disableButtons() {
-        document.querySelectorAll('.btn').forEach(btn => {
-            btn.disabled = true;
-        });
-    }
-
-    enableButtons() {
-        document.querySelectorAll('.btn').forEach(btn => {
-            btn.disabled = false;
-        });
     }
 
     formatTime(isoString) {
@@ -509,10 +379,6 @@ class ShotsDashboard {
 
     handleStateUpdate(data) {
         // Update UI with new state from WebSocket
-        if (data.stats) {
-            this.updateStats(data.stats);
-        }
-
         if (data.files) {
             this.updateFiles(data.files);
         }
