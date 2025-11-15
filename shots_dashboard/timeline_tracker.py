@@ -141,9 +141,8 @@ class TimelineTracker:
                     # Check if this file should actually be NEWER_PROJECT
                     if is_in_newer_project(file_path.name, prproj_media, self.state.timeline_path):
                         old_state = record.state
-                        record.state = FileState.NEWER_PROJECT
-                        record.last_updated = datetime.now()
-                        self.state.update_file(record)
+                        new_record = record.with_state(FileState.NEWER_PROJECT)
+                        self.state.update_file(new_record)
                         transitions.append(StateTransition(
                             path=file_path,
                             old_state=old_state,
