@@ -193,14 +193,22 @@ class ClipPreviewGenerator:
 
         # Re-encode for accuracy (don't use -c copy)
         # Use reasonable quality settings
+        # Check if source has audio
+        has_audio = self._has_audio_stream(source_path)
+
         cmd.extend([
             "-c:v", "libx264",
             "-preset", "fast",
-            "-crf", "23",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            str(output_path)
+            "-crf", "23"
         ])
+
+        if has_audio:
+            cmd.extend([
+                "-c:a", "aac",
+                "-b:a", "128k"
+            ])
+
+        cmd.append(str(output_path))
 
         logger.debug(f"FFmpeg command: {' '.join(cmd)}")
 
@@ -228,8 +236,9 @@ class ClipPreviewGenerator:
         if not segments:
             raise PreviewGenerationError("No segments in clip data")
 
-        # Detect if this is audio-only or video
+        # Detect media type
         is_audio_only = self._is_audio_only(source_path)
+        has_audio = is_audio_only or self._has_audio_stream(source_path)
 
         # Build filter_complex for precise segment extraction
         filter_parts = []
@@ -242,30 +251,38 @@ class ClipPreviewGenerator:
             if end is None:
                 raise PreviewGenerationError(f"Segment {i} missing source_end")
 
-            if not is_audio_only:
-                # Video trim
+            if is_audio_only:
+                # Audio-only file
+                filter_parts.append(
+                    f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
+                )
+                concat_inputs.append(f"[a{i}]")
+            elif has_audio:
+                # Video with audio
                 filter_parts.append(
                     f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}]"
                 )
-                # Audio trim
                 filter_parts.append(
                     f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
                 )
                 # Concat expects interleaved: [v0][a0][v1][a1]...
                 concat_inputs.extend([f"[v{i}]", f"[a{i}]"])
             else:
-                # Audio trim
+                # Video without audio
                 filter_parts.append(
-                    f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
+                    f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}]"
                 )
-                concat_inputs.append(f"[a{i}]")
+                concat_inputs.append(f"[v{i}]")
 
         # Concatenate all segments
         n = len(segments)
         if is_audio_only:
             concat_filter = f"{''.join(concat_inputs)}concat=n={n}:v=0:a=1[outa]"
-        else:
+        elif has_audio:
             concat_filter = f"{''.join(concat_inputs)}concat=n={n}:v=1:a=1[outv][outa]"
+        else:
+            # Video only, no audio
+            concat_filter = f"{''.join(concat_inputs)}concat=n={n}:v=1:a=0[outv]"
 
         filter_parts.append(concat_filter)
         filter_complex = ";".join(filter_parts)
@@ -280,8 +297,10 @@ class ClipPreviewGenerator:
         # Map outputs
         if is_audio_only:
             cmd.extend(["-map", "[outa]"])
-        else:
+        elif has_audio:
             cmd.extend(["-map", "[outv]", "-map", "[outa]"])
+        else:
+            cmd.extend(["-map", "[outv]"])
 
         # Encoding settings
         if is_audio_only:
@@ -289,13 +308,20 @@ class ClipPreviewGenerator:
                 "-c:a", "aac",
                 "-b:a", "128k"
             ])
-        else:
+        elif has_audio:
             cmd.extend([
                 "-c:v", "libx264",
                 "-preset", "fast",
                 "-crf", "23",
                 "-c:a", "aac",
                 "-b:a", "128k"
+            ])
+        else:
+            # Video only, no audio
+            cmd.extend([
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23"
             ])
 
         cmd.append(str(output_path))
@@ -339,6 +365,37 @@ class ClipPreviewGenerator:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             # If ffprobe fails, guess from extension
             return False
+
+    def _has_audio_stream(self, source_path: Path) -> bool:
+        """
+        Check if source file has an audio stream.
+
+        Returns True if file has at least one audio stream, False otherwise.
+        """
+        # Audio-only files obviously have audio
+        audio_extensions = {'.wav', '.mp3', '.aac', '.flac', '.ogg', '.m4a', '.aif', '.aiff'}
+        if source_path.suffix.lower() in audio_extensions:
+            return True
+
+        # Use ffprobe to check for audio stream
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-select_streams", "a:0",
+                    "-show_entries", "stream=codec_type",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(source_path)
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.stdout.strip() == "audio"
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            # If ffprobe fails, assume video files have audio
+            return True
 
     def _get_cache_key(self, clip_data: dict, source_path: Path) -> str:
         """
