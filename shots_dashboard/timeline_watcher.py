@@ -75,13 +75,13 @@ class TimelineWatcher:
         Initialize watcher.
 
         Args:
-            watch_dir: Directory to watch for .otio files
+            watch_dir: Directory to watch for .otio and .xml files
             callback: Function to call when a timeline file is created/modified
         """
         self.watch_dir = watch_dir
         self.callback = callback
         self.observer = Observer()
-        self.handler = FileWatcherHandler(callback, {'.otio'})
+        self.handler = FileWatcherHandler(callback, {'.otio', '.xml'})
 
     def start(self) -> None:
         """Start watching the directory."""
@@ -127,11 +127,11 @@ class MediaWatcher:
         self.handler = FileWatcherHandler(callback, self.MEDIA_EXTENSIONS)
 
     def start(self) -> None:
-        """Start watching the directory."""
+        """Start watching the directory recursively."""
         self.watch_dir.mkdir(parents=True, exist_ok=True)
-        self.observer.schedule(self.handler, str(self.watch_dir), recursive=False)
+        self.observer.schedule(self.handler, str(self.watch_dir), recursive=True)
         self.observer.start()
-        print(f"📁 Watching for media files in: {self.watch_dir}")
+        print(f"📁 Watching for media files in: {self.watch_dir} (recursive)")
 
     def stop(self) -> None:
         """Stop watching the directory."""

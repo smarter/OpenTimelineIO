@@ -338,8 +338,130 @@ class ShotsDashboard {
     }
 
     toggleHistoricalTimeline(show) {
+        const currentSection = document.getElementById('timeline-current');
         const historicalSection = document.getElementById('timeline-historical');
+        currentSection.style.display = show ? 'block' : 'none';
         historicalSection.style.display = show ? 'block' : 'none';
+    }
+
+    renderVisualTimeline(timelineData) {
+        const container = document.getElementById('timeline-visual-canvas');
+
+        if (!timelineData || !timelineData.tracks || timelineData.tracks.length === 0) {
+            container.innerHTML = '<p class="empty-state">No timeline loaded yet</p>';
+            return;
+        }
+
+        // Clear container
+        container.innerHTML = '';
+
+        // Create timeline visualization
+        const duration = timelineData.duration;
+        const trackHeight = 40;
+        const headerWidth = 120;
+        const timelineWidth = container.clientWidth - headerWidth - 40;
+        const padding = 20;
+
+        // Create wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'timeline-viz-wrapper';
+
+        // Add timeline header with name and duration
+        const header = document.createElement('div');
+        header.className = 'timeline-viz-header';
+        header.innerHTML = `
+            <div class="timeline-viz-title">${this.escapeHtml(timelineData.name)}</div>
+            <div class="timeline-viz-duration">Duration: ${this.formatDuration(duration)}</div>
+        `;
+        wrapper.appendChild(header);
+
+        // Create time ruler
+        const ruler = document.createElement('div');
+        ruler.className = 'timeline-ruler';
+        ruler.style.marginLeft = `${headerWidth}px`;
+
+        // Add time markers
+        const numMarkers = Math.min(10, Math.floor(duration / 5) + 1);
+        for (let i = 0; i <= numMarkers; i++) {
+            const time = (duration / numMarkers) * i;
+            const marker = document.createElement('div');
+            marker.className = 'time-marker';
+            marker.style.left = `${(time / duration) * 100}%`;
+            marker.innerHTML = `<span class="time-label">${this.formatDuration(time)}</span>`;
+            ruler.appendChild(marker);
+        }
+        wrapper.appendChild(ruler);
+
+        // Create tracks container
+        const tracksContainer = document.createElement('div');
+        tracksContainer.className = 'timeline-tracks-container';
+
+        // Render each track
+        timelineData.tracks.forEach((track, trackIdx) => {
+            const trackRow = document.createElement('div');
+            trackRow.className = `timeline-track ${track.kind.toLowerCase()}`;
+            trackRow.style.height = `${trackHeight}px`;
+
+            // Track header
+            const trackHeader = document.createElement('div');
+            trackHeader.className = 'track-header';
+            trackHeader.style.width = `${headerWidth}px`;
+            trackHeader.innerHTML = `
+                <div class="track-name">${this.escapeHtml(track.name)}</div>
+                <div class="track-kind">${track.kind}</div>
+            `;
+            trackRow.appendChild(trackHeader);
+
+            // Track clips area
+            const trackClips = document.createElement('div');
+            trackClips.className = 'track-clips';
+            trackClips.style.width = `${timelineWidth}px`;
+
+            // Render clips
+            track.clips.forEach(clip => {
+                const clipEl = document.createElement('div');
+                clipEl.className = 'timeline-clip';
+                clipEl.setAttribute('data-filename', clip.name);
+
+                const startPercent = (clip.start / duration) * 100;
+                const widthPercent = (clip.duration / duration) * 100;
+
+                clipEl.style.left = `${startPercent}%`;
+                clipEl.style.width = `${widthPercent}%`;
+
+                // Clip content
+                const clipContent = document.createElement('div');
+                clipContent.className = 'clip-content';
+                clipContent.textContent = clip.name;
+                clipContent.title = `${clip.name}\nStart: ${this.formatDuration(clip.start)}\nDuration: ${this.formatDuration(clip.duration)}`;
+
+                clipEl.appendChild(clipContent);
+
+                // Attach preview handlers
+                this.attachPreviewHandlers(clipEl, clip.name);
+
+                trackClips.appendChild(clipEl);
+            });
+
+            trackRow.appendChild(trackClips);
+            tracksContainer.appendChild(trackRow);
+        });
+
+        wrapper.appendChild(tracksContainer);
+        container.appendChild(wrapper);
+    }
+
+    formatDuration(seconds) {
+        const totalSeconds = Math.floor(seconds);
+        const frames = Math.round((seconds - totalSeconds) * 30); // Assume 30fps for display
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+
+        if (mins > 0) {
+            return `${mins}:${secs.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
+        } else {
+            return `${secs}:${frames.toString().padStart(2, '0')}`;
+        }
     }
 
     setupWebSocket() {
@@ -393,6 +515,13 @@ class ShotsDashboard {
 
         if (data.timeline_history) {
             this.updateTimelineHistory(data.timeline_history);
+        }
+
+        if (data.timeline_visual) {
+            this.renderVisualTimeline(data.timeline_visual);
+        } else {
+            // Clear timeline if none available
+            this.renderVisualTimeline(null);
         }
 
         this.showStatus('Ready', 'success');

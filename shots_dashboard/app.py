@@ -50,7 +50,7 @@ def create_app(
     Args:
         db_path: Path to database file (for testing)
         watch_dir: Optional directory to watch for .otio timeline files
-        media_dir: Optional directory to watch for media files
+        media_dir: Optional directory to recursively scan and watch for media files
 
     Returns:
         Tuple of (Flask application, SocketIO instance)
@@ -125,11 +125,69 @@ def create_app(
                 ]
             }
 
+            # Get visual timeline data
+            timeline_visual = None
+            if tracker.state.timeline_path and tracker.state.timeline_path.exists():
+                try:
+                    import opentimelineio as otio
+                    timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
+
+                    if isinstance(timeline, otio.schema.Timeline):
+                        duration = timeline.duration()
+                        duration_seconds = float(duration.value) / float(duration.rate)
+
+                        tracks_data = []
+                        for track_idx, track in enumerate(timeline.tracks):
+                            clips_data = []
+
+                            for item_idx, item in enumerate(track):
+                                if isinstance(item, otio.schema.Clip):
+                                    range_in_parent = track.range_of_child_at_index(item_idx)
+                                    start_time = range_in_parent.start_time
+                                    duration_clip = range_in_parent.duration
+
+                                    start_seconds = float(start_time.value) / float(start_time.rate)
+                                    duration_seconds_clip = float(duration_clip.value) / float(duration_clip.rate)
+
+                                    clips_data.append({
+                                        "name": item.name or "Unnamed Clip",
+                                        "start": start_seconds,
+                                        "duration": duration_seconds_clip,
+                                        "end": start_seconds + duration_seconds_clip
+                                    })
+
+                            if clips_data:
+                                # Handle track.kind - can be enum or string depending on adapter
+                                track_kind = "Video"  # default
+                                if track.kind:
+                                    if hasattr(track.kind, 'name'):
+                                        track_kind = track.kind.name
+                                    else:
+                                        track_kind = str(track.kind)
+
+                                tracks_data.append({
+                                    "name": track.name or f"Track {track_idx + 1}",
+                                    "kind": track_kind,
+                                    "clips": clips_data
+                                })
+
+                        timeline_visual = {
+                            "name": timeline.name,
+                            "duration": duration_seconds,
+                            "tracks": tracks_data
+                        }
+                except Exception as e:
+                    print(f"⚠️  Error extracting timeline visual data: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Timeline visual data is optional, continue without it
+
             # Emit to all connected clients
             socketio.emit(event_type, {
                 "stats": stats,
                 "files": files,
                 "timeline_history": timeline_history,
+                "timeline_visual": timeline_visual,
                 "timeline_path": str(tracker.state.timeline_path) if tracker.state.timeline_path else None,
                 "last_scan": tracker.state.last_scan.isoformat() if tracker.state.last_scan else None,
                 "timestamp": datetime.now().isoformat()
@@ -351,6 +409,89 @@ def create_app(
                 "error": str(e)
             }), 500
 
+    @app.route('/api/timeline_visual')
+    def api_timeline_visual() -> tuple[Any, int]:
+        """
+        Get visual timeline data with clip positions and timing.
+
+        Returns:
+            JSON with timeline tracks, clips, and timing information
+        """
+        try:
+            import opentimelineio as otio
+
+            tracker = get_tracker()
+
+            if not tracker.state.timeline_path or not tracker.state.timeline_path.exists():
+                return jsonify({
+                    "success": True,
+                    "timeline": None
+                }), 200
+
+            # Load timeline with OTIO
+            timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
+
+            if not isinstance(timeline, otio.schema.Timeline):
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid timeline format"
+                }), 400
+
+            # Extract timeline data
+            duration = timeline.duration()
+            duration_seconds = float(duration.value) / float(duration.rate)
+
+            tracks_data = []
+            for track_idx, track in enumerate(timeline.tracks):
+                clips_data = []
+
+                for item_idx, item in enumerate(track):
+                    if isinstance(item, otio.schema.Clip):
+                        # Get timeline position
+                        range_in_parent = track.range_of_child_at_index(item_idx)
+                        start_time = range_in_parent.start_time
+                        duration = range_in_parent.duration
+
+                        start_seconds = float(start_time.value) / float(start_time.rate)
+                        duration_seconds_clip = float(duration.value) / float(duration.rate)
+
+                        clips_data.append({
+                            "name": item.name or "Unnamed Clip",
+                            "start": start_seconds,
+                            "duration": duration_seconds_clip,
+                            "end": start_seconds + duration_seconds_clip
+                        })
+
+                if clips_data:  # Only include tracks with clips
+                    # Handle track.kind - can be enum or string depending on adapter
+                    track_kind = "Video"  # default
+                    if track.kind:
+                        if hasattr(track.kind, 'name'):
+                            track_kind = track.kind.name
+                        else:
+                            track_kind = str(track.kind)
+
+                    tracks_data.append({
+                        "name": track.name or f"Track {track_idx + 1}",
+                        "kind": track_kind,
+                        "clips": clips_data
+                    })
+
+            return jsonify({
+                "success": True,
+                "timeline": {
+                    "name": timeline.name,
+                    "duration": duration_seconds,
+                    "tracks": tracks_data
+                }
+            }), 200
+
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
     @app.route('/api/preview/<path:filename>')
     def api_preview(filename: str) -> Response | tuple[Any, int]:
         """
@@ -477,8 +618,39 @@ def create_app(
         """Handle explicit state request from client."""
         emit_state_update('state_update')
 
-    # Set up timeline watcher if watch_dir is provided
+    # Scan for timeline files and load most recent if watch_dir is provided
     if watch_dir:
+        print(f"📝 Scanning for timeline files in: {watch_dir}")
+        try:
+            # Find all timeline files (non-recursive, top level only)
+            timeline_files = []
+            for ext in ['.otio', '.xml']:
+                timeline_files.extend(watch_dir.glob(f'*{ext}'))
+                timeline_files.extend(watch_dir.glob(f'*{ext.upper()}'))
+
+            if timeline_files:
+                # Sort by modification time, most recent first
+                timeline_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                most_recent = timeline_files[0]
+
+                print(f"   Found {len(timeline_files)} timeline(s)")
+                print(f"   Loading most recent: {most_recent.name}")
+
+                tracker = get_tracker()
+                transitions = tracker.update_from_timeline(most_recent)
+                save_tracker(tracker)
+
+                print(f"   ✓ Loaded {most_recent.name}")
+                print(f"   {len(transitions)} state transitions")
+
+                # Emit state update
+                emit_state_update('timeline_update_complete')
+            else:
+                print(f"   No timeline files found")
+        except Exception as e:
+            print(f"   ✗ Error scanning timelines: {e}")
+
+        # Set up timeline watcher
         def on_timeline_file_detected(timeline_path: Path) -> None:
             """Handle new or modified timeline file."""
             try:
@@ -498,6 +670,21 @@ def create_app(
         timeline_watcher = TimelineWatcher(watch_dir, on_timeline_file_detected)
         timeline_watcher.start()
         app.timeline_watcher = timeline_watcher  # Store on app for cleanup
+
+    # Perform initial recursive scan if media_dir is provided
+    if media_dir:
+        print(f"📁 Scanning media directory: {media_dir}")
+        try:
+            tracker = get_tracker()
+            transitions = tracker.scan_directory(media_dir)
+            save_tracker(tracker)
+
+            print(f"   ✓ Found {len(transitions)} media files")
+
+            # Emit state update
+            emit_state_update('scan_complete')
+        except Exception as e:
+            print(f"   ✗ Error scanning directory: {e}")
 
     # Set up media watcher if media_dir is provided
     if media_dir:
@@ -559,7 +746,13 @@ def main() -> None:
         "--watch-dir",
         type=Path,
         default=None,
-        help="Directory to watch for .otio timeline files"
+        help="Directory to watch for .otio and .xml timeline files"
+    )
+    parser.add_argument(
+        "--media-dir",
+        type=Path,
+        default=None,
+        help="Directory to recursively scan and watch for media files"
     )
 
     args = parser.parse_args()
@@ -579,7 +772,7 @@ def main() -> None:
 
     else:
         # Normal mode
-        app, socketio = create_app(watch_dir=args.watch_dir)
+        app, socketio = create_app(watch_dir=args.watch_dir, media_dir=args.media_dir)
 
     print("Starting Shots Dashboard...")
     print(f"Database: {app.config['DATABASE_PATH']}")
