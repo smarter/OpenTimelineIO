@@ -103,14 +103,22 @@ def create_app(
             # Import FileState to use with get_files_as_sequences
             from models import FileState
 
+            def get_display_name(file_record):
+                """Get a friendly display name for a file or sequence."""
+                # For sequences (paths like "folder/*.png"), show "folder/*.png"
+                if file_record.path.name.startswith('*'):
+                    return f"{file_record.path.parent.name}/{file_record.path.name}"
+                # For regular files, just show the filename
+                return file_record.path.name
+
             files = {
-                "new": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                "new": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
                         for f in tracker.state.get_files_as_sequences(FileState.NEW)],
-                "in_use": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                "in_use": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
                           for f in tracker.state.get_files_as_sequences(FileState.IN_USE)],
-                "removed": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                "removed": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
                            for f in tracker.state.get_files_as_sequences(FileState.REMOVED)],
-                "newer_project": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                "newer_project": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
                                  for f in tracker.state.get_files_as_sequences(FileState.NEWER_PROJECT)],
             }
 
@@ -250,13 +258,27 @@ def create_app(
             # Import FileState for sequence grouping
             from models import FileState
 
+            def serialize_file_with_display_name(record):
+                """Serialize a file record with a friendly display name."""
+                # For sequences, show "folder/*.png" instead of just "*.png"
+                name = record.path.name
+                if name.startswith('*'):
+                    name = f"{record.path.parent.name}/{name}"
+
+                return {
+                    "path": str(record.path),
+                    "name": name,
+                    "state": record.state.name,
+                    "last_updated": record.last_updated.isoformat()
+                }
+
             return jsonify({
                 "success": True,
                 "files": {
-                    "new": [serialize_file(f) for f in state.get_files_as_sequences(FileState.NEW)],
-                    "in_use": [serialize_file(f) for f in state.get_files_as_sequences(FileState.IN_USE)],
-                    "removed": [serialize_file(f) for f in state.get_files_as_sequences(FileState.REMOVED)],
-                    "newer_project": [serialize_file(f) for f in state.get_files_as_sequences(FileState.NEWER_PROJECT)]
+                    "new": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.NEW)],
+                    "in_use": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.IN_USE)],
+                    "removed": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.REMOVED)],
+                    "newer_project": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.NEWER_PROJECT)]
                 }
             }), 200
 
