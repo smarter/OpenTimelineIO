@@ -58,6 +58,11 @@ class ShotsDashboard {
         const container = document.getElementById(containerId);
         const countEl = document.getElementById(countId);
 
+        if (!container || !countEl) {
+            console.error(`Missing elements: container=${containerId}, count=${countId}`);
+            return;
+        }
+
         countEl.textContent = files.length;
 
         if (files.length === 0) {
