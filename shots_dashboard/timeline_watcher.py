@@ -82,13 +82,13 @@ class TimelineWatcher:
         Initialize watcher.
 
         Args:
-            watch_dir: Directory to watch for .otio and .xml files
+            watch_dir: Directory to watch for .otio, .xml, and .prproj files
             callback: Function to call when a timeline file is created/modified
         """
         self.watch_dir = watch_dir
         self.callback = callback
         self.observer = Observer()
-        self.handler = FileWatcherHandler(callback, {'.otio', '.xml'})
+        self.handler = FileWatcherHandler(callback, {'.otio', '.xml', '.prproj'})
 
     def start(self) -> None:
         """Start watching the directory."""

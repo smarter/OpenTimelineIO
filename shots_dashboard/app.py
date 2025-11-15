@@ -230,9 +230,10 @@ def create_app(
                     if tracker.state.timeline_path.suffix.lower() == '.prproj':
                         import otio_prproj_adapter
                         timeline = otio_prproj_adapter.read_from_file(str(tracker.state.timeline_path))
-                        # If multiple sequences, use the first one
+                        # If multiple sequences, use the last one (most recent version)
                         if not isinstance(timeline, otio.schema.Timeline):
-                            timeline = list(timeline)[0] if len(list(timeline)) > 0 else None
+                            sequences = list(timeline)
+                            timeline = sequences[-1] if len(sequences) > 0 else None
                     else:
                         timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
 
@@ -715,7 +716,7 @@ def create_app(
         try:
             # Find all timeline files (non-recursive, top level only)
             timeline_files = []
-            for ext in ['.otio', '.xml']:
+            for ext in ['.otio', '.xml', '.prproj']:
                 timeline_files.extend(watch_dir.glob(f'*{ext}'))
                 timeline_files.extend(watch_dir.glob(f'*{ext.upper()}'))
 
@@ -734,7 +735,35 @@ def create_app(
                 logger.debug(f"Most recent timeline: {most_recent} (mtime: {most_recent.stat().st_mtime})")
 
                 tracker = get_tracker()
-                transitions = tracker.update_from_timeline(most_recent)
+
+                # For .prproj files, find and use the most recent sequence
+                if most_recent.suffix.lower() == '.prproj':
+                    import opentimelineio as otio
+                    import otio_prproj_adapter
+
+                    result = otio_prproj_adapter.read_from_file(str(most_recent))
+
+                    # Get all sequences
+                    if isinstance(result, otio.schema.Timeline):
+                        sequences = [result]
+                    else:
+                        sequences = list(result)
+
+                    if sequences:
+                        # Use the last sequence (typically the most recent version)
+                        most_recent_seq = sequences[-1]
+                        logger.info(f"   Using sequence: {most_recent_seq.name}")
+                        logger.info(f"   (found {len(sequences)} sequence(s) in {most_recent.name})")
+
+                        # Update tracker with the .prproj path (not a temp file)
+                        # The tracker will handle loading the correct sequence
+                        transitions = tracker.update_from_timeline(most_recent)
+                    else:
+                        logger.warning(f"   No sequences found in {most_recent.name}")
+                        transitions = []
+                else:
+                    transitions = tracker.update_from_timeline(most_recent)
+
                 save_tracker(tracker)
 
                 logger.info(f"   ✓ Loaded {most_recent.name}")
@@ -745,7 +774,7 @@ def create_app(
                 emit_state_update('timeline_update_complete')
             else:
                 logger.info(f"   No timeline files found")
-                logger.warning(f"No .otio or .xml files in {watch_dir}")
+                logger.warning(f"No .otio, .xml, or .prproj files in {watch_dir}")
         except Exception as e:
             logger.error(f"   ✗ Error scanning timelines: {e}")
             logger.exception(f"Timeline scan error: {e}")

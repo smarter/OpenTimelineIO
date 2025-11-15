@@ -206,9 +206,10 @@ class TimelineTracker:
             if timeline_path.suffix.lower() == '.prproj':
                 import otio_prproj_adapter
                 timeline = otio_prproj_adapter.read_from_file(str(timeline_path))
-                # If multiple sequences, use the first one
+                # If multiple sequences, use the last one (most recent version)
                 if not isinstance(timeline, otio.schema.Timeline):
-                    timeline = list(timeline)[0] if len(list(timeline)) > 0 else None
+                    sequences = list(timeline)
+                    timeline = sequences[-1] if len(sequences) > 0 else None
                 if timeline is None:
                     raise ValueError("No timeline found in .prproj file")
             else:
