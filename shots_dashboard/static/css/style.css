@@ -89,10 +89,6 @@ body {
     background: rgba(46, 204, 113, 0.1);
 }
 
-.header-newer-project {
-    background: rgba(83, 52, 131, 0.1);
-}
-
 .header-removed {
     background: rgba(231, 76, 60, 0.1);
 }

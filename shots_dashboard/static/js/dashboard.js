@@ -54,7 +54,6 @@ class ShotsDashboard {
         this.renderFileList('files-new-video', files.new_video || [], 'count-new-video');
         this.renderFileList('files-new-audio', files.new_audio || [], 'count-new-audio');
         this.renderFileList('files-in-use', files.in_use || [], 'count-in-use');
-        this.renderFileList('files-newer-project', files.newer_project || [], 'count-newer-project');
         this.renderFileList('files-removed', files.removed || [], 'count-removed');
     }
 
