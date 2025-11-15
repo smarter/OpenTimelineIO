@@ -932,6 +932,39 @@ def create_app(
         media_watcher.start()
         app.media_watcher = media_watcher  # Store on app for cleanup
 
+    # Set up periodic scan to catch any missed file changes
+    if media_dir or watch_dir:
+        import threading
+        import time
+
+        def periodic_scan():
+            """Scan directories every 60 seconds to catch missed updates."""
+            while True:
+                time.sleep(60)
+                try:
+                    logger.debug("Running periodic scan...")
+                    tracker = get_tracker()
+                    transitions = []
+
+                    # Scan media directory if configured
+                    if media_dir:
+                        media_transitions = tracker.scan_directory(media_dir, watch_dir=watch_dir)
+                        transitions.extend(media_transitions)
+
+                    if transitions:
+                        save_tracker(tracker)
+                        emit_state_update('scan_complete')
+                        logger.info(f"Periodic scan: {len(transitions)} state changes detected")
+                    else:
+                        logger.debug("Periodic scan: no changes")
+
+                except Exception as e:
+                    logger.error(f"Periodic scan error: {e}")
+
+        scan_thread = threading.Thread(target=periodic_scan, daemon=True)
+        scan_thread.start()
+        logger.info("⏱️  Periodic scan enabled (every 60 seconds)")
+
     return app, socketio
 
 
