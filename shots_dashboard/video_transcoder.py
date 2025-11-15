@@ -147,8 +147,13 @@ def is_web_compatible(file_path: Path) -> bool:
 
         # Check if video codec is browser-compatible
         web_video_codecs = {'h264', 'vp8', 'vp9', 'av1', 'theora'}
-        web_audio_codecs = {'aac', 'mp3', 'vorbis', 'opus', 'flac'}
+        web_audio_codecs = {'aac', 'mp3', 'vorbis', 'opus', 'flac', 'pcm'}
 
+        # For audio-only files (no video codec)
+        if not video_codec:
+            return any(codec in audio_codec for codec in web_audio_codecs) if audio_codec else False
+
+        # For video files (with or without audio)
         video_compatible = any(codec in video_codec for codec in web_video_codecs)
         audio_compatible = (not audio_codec) or any(codec in audio_codec for codec in web_audio_codecs)
 
