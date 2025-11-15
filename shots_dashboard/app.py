@@ -928,12 +928,44 @@ def main() -> None:
     if args.demo:
         logger.info("\n💡 Demo mode is active! Sample data has been created.")
 
-    # Enable auto-reload by default (debug=True) unless --no-reload is specified
+    # Enable auto-reload by default unless --no-reload is specified
     enable_reload = not args.no_reload
     if enable_reload:
         logger.info("🔄 Auto-reload enabled - server will restart on code changes")
 
-    socketio.run(app, debug=enable_reload, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
+        # Add extra files to watch for changes (templates, static files)
+        import os
+        extra_files = []
+
+        # Watch template files
+        template_dir = Path(__file__).parent / 'templates'
+        if template_dir.exists():
+            for root, dirs, files in os.walk(template_dir):
+                for file in files:
+                    extra_files.append(str(Path(root) / file))
+
+        # Watch static files
+        static_dir = Path(__file__).parent / 'static'
+        if static_dir.exists():
+            for root, dirs, files in os.walk(static_dir):
+                for file in files:
+                    extra_files.append(str(Path(root) / file))
+
+        logger.info(f"   Watching {len(extra_files)} additional files for changes")
+    else:
+        extra_files = None
+
+    # Use explicit use_reloader parameter for better SocketIO compatibility
+    socketio.run(
+        app,
+        debug=enable_reload,
+        use_reloader=enable_reload,
+        host=args.host,
+        port=args.port,
+        allow_unsafe_werkzeug=True,
+        log_output=True,
+        extra_files=extra_files
+    )
 
 
 if __name__ == '__main__':
