@@ -736,6 +736,9 @@ def create_app(
                 timeline_files.extend(watch_dir.glob(f'*{ext}'))
                 timeline_files.extend(watch_dir.glob(f'*{ext.upper()}'))
 
+            # Filter out dotfiles (hidden files starting with .)
+            timeline_files = [f for f in timeline_files if not f.name.startswith('.')]
+
             logger.debug(f"Found timeline files: {[f.name for f in timeline_files]}")
 
             if timeline_files:

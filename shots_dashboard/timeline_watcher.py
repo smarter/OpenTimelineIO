@@ -56,6 +56,10 @@ class FileWatcherHandler(FileSystemEventHandler):
 
     def _process_file(self, filepath: Path) -> None:
         """Process a file with debouncing."""
+        # Ignore dotfiles (hidden files starting with .)
+        if filepath.name.startswith('.'):
+            return
+
         now = time.time()
         last_time = self.last_processed.get(filepath, 0)
 
