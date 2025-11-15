@@ -211,7 +211,7 @@ class PremiereProjParser:
         """
         Parse effects applied to a track item.
 
-        Currently supports Time Remap (speed changes).
+        Supports various Premiere effects including filters and transforms.
 
         Args:
             track_item: VideoClipTrackItem or AudioClipTrackItem element
@@ -221,7 +221,7 @@ class PremiereProjParser:
         """
         effects = []
 
-        # Look for components which may include effects
+        # Look for ComponentChain which contains effects
         components_ref = track_item.find('.//ComponentOwner/Components')
         if components_ref is None:
             return effects
@@ -234,9 +234,44 @@ class PremiereProjParser:
         if comp_chain is None:
             return effects
 
-        # Check for time remap component
-        # This would be in ComponentParams with specific effect types
-        # For now, return empty list - can be enhanced later
+        # Look for Components in the chain
+        components_elem = comp_chain.find('.//ComponentChain/Components')
+        if components_elem is None:
+            return effects
+
+        # Iterate through all Component references
+        for comp_ref in components_elem.findall('.//Component'):
+            comp_ref_id = comp_ref.get('ObjectRef')
+            if not comp_ref_id:
+                continue
+
+            component = self._resolve_ref(comp_ref_id)
+            if component is None:
+                continue
+
+            # Get effect type and name
+            match_name = self._get_text(component, './/MatchName', '')
+            display_name = self._get_text(component, './/Component/DisplayName', '')
+
+            if not match_name and not display_name:
+                continue
+
+            # Create OTIO effect
+            effect_name = display_name if display_name else match_name
+
+            # Create effect with metadata about Premiere-specific properties
+            effect = otio.schema.Effect(
+                name=effect_name,
+                effect_name=match_name if match_name else effect_name
+            )
+
+            # Store Premiere-specific metadata
+            effect.metadata[META_NAMESPACE] = {
+                'match_name': match_name,
+                'display_name': display_name
+            }
+
+            effects.append(effect)
 
         return effects
 
@@ -268,13 +303,36 @@ class PremiereProjParser:
         if subclip is None:
             return None
 
-        # Get clip timing from TrackItem
+        # Get clip timing from TrackItem (timeline position)
         track_item = track_item_elem.find('.//TrackItem')
         if track_item is None:
             return None
 
         start_ticks = self._get_int(track_item, 'Start', 0)
         end_ticks = self._get_int(track_item, 'End', 0)
+        duration_ticks = end_ticks - start_ticks
+
+        # Get source range from the Clip element (InPoint/OutPoint in source media)
+        clip_ref = subclip.find('.//Clip')
+        source_in_ticks = 0
+        source_duration_ticks = duration_ticks
+        playback_speed = 1.0  # Default to normal speed
+
+        if clip_ref is not None:
+            clip_id = clip_ref.get('ObjectRef')
+            if clip_id:
+                clip_elem = self._resolve_ref(clip_id)
+                if clip_elem is not None:
+                    # Get InPoint and OutPoint from the Clip
+                    in_point = self._get_int(clip_elem, './/InPoint', 0)
+                    out_point = self._get_int(clip_elem, './/OutPoint', 0)
+
+                    if out_point > in_point:
+                        source_in_ticks = in_point
+                        source_duration_ticks = out_point - in_point
+
+                    # Get PlaybackSpeed (time remap)
+                    playback_speed = self._get_float(clip_elem, './/PlaybackSpeed', 1.0)
 
         # Get clip name and media reference
         name = self._parse_clip_name(subclip)
@@ -283,14 +341,10 @@ class PremiereProjParser:
         if media_ref is None:
             media_ref = otio.schema.MissingReference()
 
-        # Calculate source range
-        # For now, assume 1:1 mapping (no time remap)
-        # This can be enhanced to detect speed changes
-        duration_ticks = end_ticks - start_ticks
-
+        # Create source range with actual InPoint
         source_range = otio.opentime.TimeRange(
-            start_time=self._parse_rational_time(0, rate),
-            duration=self._parse_rational_time(duration_ticks, rate)
+            start_time=self._parse_rational_time(source_in_ticks, rate),
+            duration=self._parse_rational_time(source_duration_ticks, rate)
         )
 
         # Create clip
@@ -300,7 +354,18 @@ class PremiereProjParser:
             media_reference=media_ref
         )
 
-        # Parse and add effects
+        # Add LinearTimeWarp effect if playback speed is not 1.0
+        if playback_speed != 1.0:
+            time_effect = otio.schema.LinearTimeWarp(
+                name="Time Remap",
+                time_scalar=playback_speed
+            )
+            time_effect.metadata[META_NAMESPACE] = {
+                'playback_speed': playback_speed
+            }
+            clip.effects.append(time_effect)
+
+        # Parse and add other effects
         effects = self._parse_effects(track_item_elem)
         for effect in effects:
             clip.effects.append(effect)
