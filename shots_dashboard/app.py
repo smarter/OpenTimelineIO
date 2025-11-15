@@ -320,10 +320,16 @@ def create_app(
                     "last_updated": record.last_updated.isoformat()
                 }
 
+            # Split NEW files into audio and video
+            new_files = state.get_files_as_sequences(FileState.NEW)
+            new_audio = [f for f in new_files if f.is_audio()]
+            new_video = [f for f in new_files if f.is_video() or not (f.is_audio() or f.is_video())]  # video + other
+
             return jsonify({
                 "success": True,
                 "files": {
-                    "new": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.NEW)],
+                    "new_audio": [serialize_file_with_display_name(f) for f in new_audio],
+                    "new_video": [serialize_file_with_display_name(f) for f in new_video],
                     "in_use": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.IN_USE)],
                     "removed": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.REMOVED)],
                     "newer_project": [serialize_file_with_display_name(f) for f in state.get_files_as_sequences(FileState.NEWER_PROJECT)]

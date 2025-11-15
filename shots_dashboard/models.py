@@ -56,6 +56,16 @@ class FileRecord:
             last_updated=datetime.now()
         )
 
+    def is_audio(self) -> bool:
+        """Check if this file is audio only (not video)."""
+        audio_extensions = {'.wav', '.mp3', '.aac', '.flac', '.ogg', '.m4a', '.aif', '.aiff'}
+        return self.path.suffix.lower() in audio_extensions
+
+    def is_video(self) -> bool:
+        """Check if this file is video (may include audio)."""
+        video_extensions = {'.mov', '.mp4', '.avi', '.mkv', '.webm', '.m4v', '.mxf'}
+        return self.path.suffix.lower() in video_extensions
+
 
 @dataclass(frozen=True)
 class TimelineSnapshot:
