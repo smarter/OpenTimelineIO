@@ -105,6 +105,33 @@ class ClipPreviewGenerator:
             if not cache_path.exists():
                 raise PreviewGenerationError("FFmpeg did not create output file")
 
+            # Verify output duration matches expected timeline duration
+            try:
+                actual_duration = self._get_duration(cache_path)
+                expected_duration = clip_data.get("duration")
+
+                if expected_duration is not None:
+                    # Allow 1% tolerance for minor encoding differences
+                    tolerance = max(0.1, expected_duration * 0.01)
+                    duration_diff = abs(actual_duration - expected_duration)
+
+                    if duration_diff > tolerance:
+                        logger.warning(
+                            f"Preview duration mismatch: expected {expected_duration:.3f}s, "
+                            f"got {actual_duration:.3f}s (diff: {duration_diff:.3f}s)"
+                        )
+                        # Don't raise error, but log for debugging
+                    else:
+                        logger.info(
+                            f"Preview duration verified: {actual_duration:.3f}s "
+                            f"(expected {expected_duration:.3f}s)"
+                        )
+                else:
+                    logger.info(f"Preview generated: {cache_path} (duration: {actual_duration:.3f}s)")
+            except PreviewGenerationError as e:
+                # Duration verification failed, but preview was created
+                logger.warning(f"Could not verify duration: {e}")
+
             logger.info(f"Preview generated: {cache_path}")
             return cache_path
 
@@ -186,6 +213,8 @@ class ClipPreviewGenerator:
         # Consider speeds within 1% of 1.0 as normal (no speed change needed)
         needs_speed_change = speed is not None and abs(speed - 1.0) > 0.01
 
+        logger.debug(f"Preview generation: start={start}, duration={duration}, speed={speed}, needs_speed_change={needs_speed_change}")
+
         # Build FFmpeg command for accurate seeking
         # For maximum precision: input first, then -ss (accurate but slower)
         cmd = ["ffmpeg", "-y"]
@@ -193,47 +222,42 @@ class ClipPreviewGenerator:
         # Input file
         cmd.extend(["-i", str(source_path)])
 
-        # Accurate seeking after input
-        cmd.extend(["-ss", str(start)])
-
         # Check if source has audio
         has_audio = self._has_audio_stream(source_path)
 
         if needs_speed_change:
-            # When applying speed changes, don't use -t as it may limit output duration
-            # Instead, use trim filter to extract the exact source duration
-            pass
-        else:
-            # No speed change, so -t directly controls output duration
-            if duration is not None:
-                cmd.extend(["-t", str(duration)])
+            # For speed changes, do trimming in the filter to avoid conflicts
+            # Calculate end time for trimming
+            if duration is not None and start is not None:
+                end_time = start + duration
+            else:
+                end_time = None
 
-        if needs_speed_change:
-            # Use filter for speed changes with trim for exact duration
             filter_parts = []
 
-            # Video: trim to exact duration, reset timestamps, then apply speed
-            # Note: -ss is already used, so trim duration is from that point
-            if duration is not None:
-                filter_parts.append(f"[0:v]trim=duration={duration},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v]")
+            # Video: trim, reset PTS, then apply speed
+            if end_time is not None:
+                filter_parts.append(f"[0:v]trim=start={start}:end={end_time},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v]")
             else:
-                filter_parts.append(f"[0:v]setpts=PTS/{speed}[v]")
+                filter_parts.append(f"[0:v]trim=start={start},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v]")
 
             if has_audio:
-                # Audio: trim to exact duration, reset timestamps, then apply speed
+                # Audio: trim, reset PTS, then apply speed
                 atempo_chain = self._build_atempo_chain(speed)
-                if duration is not None:
-                    filter_parts.append(f"[0:a]atrim=duration={duration},asetpts=PTS-STARTPTS,{atempo_chain}[a]")
+                if end_time is not None:
+                    filter_parts.append(f"[0:a]atrim=start={start}:end={end_time},asetpts=PTS-STARTPTS,{atempo_chain}[a]")
                 else:
-                    filter_parts.append(f"[0:a]{atempo_chain}[a]")
+                    filter_parts.append(f"[0:a]atrim=start={start},asetpts=PTS-STARTPTS,{atempo_chain}[a]")
 
             cmd.extend(["-filter_complex", ";".join(filter_parts)])
             cmd.extend(["-map", "[v]"])
             if has_audio:
                 cmd.extend(["-map", "[a]"])
         else:
-            # No speed change, use regular stream copy
-            pass
+            # No speed change - use -ss and -t for simple extraction
+            cmd.extend(["-ss", str(start)])
+            if duration is not None:
+                cmd.extend(["-t", str(duration)])
 
         # Re-encode for accuracy (don't use -c copy)
         # Use reasonable quality settings
@@ -436,6 +460,40 @@ class ClipPreviewGenerator:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             # If ffprobe fails, guess from extension
             return False
+
+    def _get_duration(self, file_path: Path) -> float:
+        """
+        Get the duration of a media file using ffprobe.
+
+        Args:
+            file_path: Path to the media file
+
+        Returns:
+            Duration in seconds
+
+        Raises:
+            PreviewGenerationError: If ffprobe fails or duration cannot be determined
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(file_path)
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True
+            )
+            duration_str = result.stdout.strip()
+            if not duration_str:
+                raise PreviewGenerationError(f"Could not determine duration for {file_path}")
+            return float(duration_str)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as e:
+            raise PreviewGenerationError(f"Failed to get duration for {file_path}: {e}")
 
     def _build_atempo_chain(self, speed: float) -> str:
         """
