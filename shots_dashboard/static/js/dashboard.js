@@ -66,8 +66,7 @@ class ShotsDashboard {
 
         container.innerHTML = files.map(file => `
             <div class="file-item">
-                <div class="file-name" data-filename="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
-                <div class="file-path">${this.escapeHtml(file.path)}</div>
+                <div class="file-name" data-filename="${this.escapeHtml(file.name)}" title="${this.escapeHtml(file.path)}">${this.escapeHtml(file.name)}</div>
                 <div class="file-time">${this.formatTime(file.last_updated)}</div>
             </div>
         `).join('');
