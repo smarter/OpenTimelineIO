@@ -619,6 +619,10 @@ class ShotsDashboard {
                 this.audioPlayer.style.display = 'none';
                 this.videoPlayer.style.display = 'none';
 
+                // Clear previous error handlers
+                this.imagePlayer.onload = null;
+                this.imagePlayer.onerror = null;
+
                 // Load image
                 this.imagePlayer.src = `/api/preview/${encodeURIComponent(filename)}`;
 
@@ -626,14 +630,19 @@ class ShotsDashboard {
                     this.previewPopup.classList.remove('loading');
                 };
 
-                this.imagePlayer.onerror = () => {
-                    console.error('Failed to load image preview');
-                    this.hideVideoPreview();
+                this.imagePlayer.onerror = (e) => {
+                    console.error('Failed to load image preview:', filename, e);
+                    this.previewPopup.classList.remove('loading');
+                    // Don't hide preview - just show error state
                 };
             } else if (isAudio) {
                 this.audioPlayer.style.display = 'block';
                 this.videoPlayer.style.display = 'none';
                 this.imagePlayer.style.display = 'none';
+
+                // Clear previous error handlers
+                this.audioPlayer.onloadeddata = null;
+                this.audioPlayer.onerror = null;
 
                 // Load audio
                 this.audioSource.type = mimeType;
@@ -648,14 +657,18 @@ class ShotsDashboard {
                     });
                 };
 
-                this.audioPlayer.onerror = () => {
-                    console.error('Failed to load audio preview');
-                    this.hideVideoPreview();
+                this.audioPlayer.onerror = (e) => {
+                    console.error('Failed to load audio preview:', filename, e);
+                    this.previewPopup.classList.remove('loading');
                 };
             } else {
                 this.videoPlayer.style.display = 'block';
                 this.audioPlayer.style.display = 'none';
                 this.imagePlayer.style.display = 'none';
+
+                // Clear previous error handlers
+                this.videoPlayer.onloadeddata = null;
+                this.videoPlayer.onerror = null;
 
                 // Load video
                 this.videoSource.type = mimeType;
@@ -670,9 +683,9 @@ class ShotsDashboard {
                     });
                 };
 
-                this.videoPlayer.onerror = () => {
-                    console.error('Failed to load video preview');
-                    this.hideVideoPreview();
+                this.videoPlayer.onerror = (e) => {
+                    console.error('Failed to load video preview:', filename, e);
+                    this.previewPopup.classList.remove('loading');
                 };
             }
         }, 300); // 300ms delay
@@ -698,6 +711,14 @@ class ShotsDashboard {
 
         // Clear image using data URI to avoid "Invalid URI" error
         this.imagePlayer.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
+        // Clear all event handlers to prevent interference
+        this.videoPlayer.onloadeddata = null;
+        this.videoPlayer.onerror = null;
+        this.audioPlayer.onloadeddata = null;
+        this.audioPlayer.onerror = null;
+        this.imagePlayer.onload = null;
+        this.imagePlayer.onerror = null;
 
         // Hide all players
         this.videoPlayer.style.display = 'none';
