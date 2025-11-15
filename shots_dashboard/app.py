@@ -177,6 +177,21 @@ def create_app(
                                         "end": start_seconds + duration_seconds_clip
                                     })
 
+                            # Merge adjacent clips with the same name
+                            merged_clips = []
+                            for clip in clips_data:
+                                if merged_clips and \
+                                   merged_clips[-1]["name"] == clip["name"] and \
+                                   abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:  # Within 0.01s tolerance
+                                    # Extend the previous clip
+                                    merged_clips[-1]["end"] = clip["end"]
+                                    merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
+                                else:
+                                    # Add as new clip
+                                    merged_clips.append(clip)
+
+                            clips_data = merged_clips
+
                             if clips_data:
                                 # Handle track.kind - can be enum or string depending on adapter
                                 track_kind = "Video"  # default
@@ -500,6 +515,21 @@ def create_app(
                             "duration": duration_seconds_clip,
                             "end": start_seconds + duration_seconds_clip
                         })
+
+                # Merge adjacent clips with the same name
+                merged_clips = []
+                for clip in clips_data:
+                    if merged_clips and \
+                       merged_clips[-1]["name"] == clip["name"] and \
+                       abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:  # Within 0.01s tolerance
+                        # Extend the previous clip
+                        merged_clips[-1]["end"] = clip["end"]
+                        merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
+                    else:
+                        # Add as new clip
+                        merged_clips.append(clip)
+
+                clips_data = merged_clips
 
                 if clips_data:  # Only include tracks with clips
                     # Handle track.kind - can be enum or string depending on adapter
