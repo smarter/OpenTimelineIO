@@ -571,7 +571,8 @@ def create_app(
                     mimetype=mimetype,
                     headers={
                         'Accept-Ranges': 'bytes',
-                        'Content-Type': mimetype
+                        'Content-Type': mimetype,
+                        'Content-Disposition': 'inline'
                     }
                 )
 
@@ -603,7 +604,8 @@ def create_app(
                         mimetype='audio/ogg',
                         headers={
                             'Content-Type': 'audio/ogg',
-                            'Accept-Ranges': 'bytes'
+                            'Accept-Ranges': 'bytes',
+                            'Content-Disposition': 'inline'
                         }
                     )
 
@@ -628,7 +630,8 @@ def create_app(
                         mimetype='video/webm',
                         headers={
                             'Content-Type': 'video/webm',
-                            'Accept-Ranges': 'bytes'
+                            'Accept-Ranges': 'bytes',
+                            'Content-Disposition': 'inline'
                         }
                     )
 
