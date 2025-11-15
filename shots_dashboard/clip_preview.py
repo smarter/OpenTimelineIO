@@ -233,13 +233,24 @@ class ClipPreviewGenerator:
             else:
                 end_time = None
 
+            # Get source frame rate for frame-accurate output
+            source_fps = self._get_frame_rate(source_path)
+            logger.debug(f"Source frame rate: {source_fps} fps")
+
             filter_parts = []
 
-            # Video: trim, reset PTS, then apply speed
+            # Video: trim, reset PTS, apply speed, then fps filter for frame accuracy
+            # The fps filter ensures exact frame count for the output duration
             if end_time is not None:
-                filter_parts.append(f"[0:v]trim=start={start}:end={end_time},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v]")
+                filter_parts.append(
+                    f"[0:v]trim=start={start}:end={end_time},setpts=PTS-STARTPTS,"
+                    f"setpts=PTS/{speed},fps={source_fps}[v]"
+                )
             else:
-                filter_parts.append(f"[0:v]trim=start={start},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v]")
+                filter_parts.append(
+                    f"[0:v]trim=start={start},setpts=PTS-STARTPTS,"
+                    f"setpts=PTS/{speed},fps={source_fps}[v]"
+                )
 
             if has_audio:
                 # Audio: trim, reset PTS, then apply speed
@@ -460,6 +471,49 @@ class ClipPreviewGenerator:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             # If ffprobe fails, guess from extension
             return False
+
+    def _get_frame_rate(self, file_path: Path) -> float:
+        """
+        Get the frame rate of a video file using ffprobe.
+
+        Args:
+            file_path: Path to the video file
+
+        Returns:
+            Frame rate as float (e.g., 24.0, 25.0, 29.97)
+
+        Raises:
+            PreviewGenerationError: If ffprobe fails or frame rate cannot be determined
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries", "stream=r_frame_rate",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(file_path)
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True
+            )
+            fps_str = result.stdout.strip()
+            if not fps_str:
+                # Default to 24fps if cannot determine (cinema standard)
+                return 24.0
+
+            # Parse fractional frame rate (e.g., "24000/1001" for 23.976)
+            if '/' in fps_str:
+                num, den = fps_str.split('/')
+                return float(num) / float(den)
+            else:
+                return float(fps_str)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as e:
+            logger.warning(f"Could not determine frame rate for {file_path}: {e}, defaulting to 24fps")
+            return 24.0
 
     def _get_duration(self, file_path: Path) -> float:
         """
