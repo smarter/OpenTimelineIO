@@ -649,12 +649,10 @@ class ShotsDashboard {
                 this.audioSource.src = `/api/preview/${encodeURIComponent(filename)}`;
                 this.audioPlayer.load();
 
-                // Start playing when loaded
+                // Just show controls when loaded (no autoplay for audio)
                 this.audioPlayer.onloadeddata = () => {
                     this.previewPopup.classList.remove('loading');
-                    this.audioPlayer.play().catch(err => {
-                        console.warn('Autoplay prevented:', err);
-                    });
+                    // Don't autoplay - browsers block unmuted audio autoplay
                 };
 
                 this.audioPlayer.onerror = (e) => {
