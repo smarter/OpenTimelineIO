@@ -225,7 +225,16 @@ def create_app(
             if tracker.state.timeline_path and tracker.state.timeline_path.exists():
                 try:
                     import opentimelineio as otio
-                    timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
+
+                    # Check if it's a .prproj file and use our custom adapter
+                    if tracker.state.timeline_path.suffix.lower() == '.prproj':
+                        import otio_prproj_adapter
+                        timeline = otio_prproj_adapter.read_from_file(str(tracker.state.timeline_path))
+                        # If multiple sequences, use the first one
+                        if not isinstance(timeline, otio.schema.Timeline):
+                            timeline = list(timeline)[0] if len(list(timeline)) > 0 else None
+                    else:
+                        timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
 
                     if isinstance(timeline, otio.schema.Timeline):
                         duration = timeline.duration()

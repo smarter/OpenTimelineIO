@@ -202,7 +202,17 @@ class TimelineTracker:
             raise ValueError(f"Timeline file does not exist: {timeline_path}")
 
         try:
-            timeline = otio.adapters.read_from_file(str(timeline_path))
+            # Check if it's a .prproj file and use our custom adapter
+            if timeline_path.suffix.lower() == '.prproj':
+                import otio_prproj_adapter
+                timeline = otio_prproj_adapter.read_from_file(str(timeline_path))
+                # If multiple sequences, use the first one
+                if not isinstance(timeline, otio.schema.Timeline):
+                    timeline = list(timeline)[0] if len(list(timeline)) > 0 else None
+                if timeline is None:
+                    raise ValueError("No timeline found in .prproj file")
+            else:
+                timeline = otio.adapters.read_from_file(str(timeline_path))
         except Exception as e:
             raise ValueError(f"Failed to read timeline: {e}") from e
 
