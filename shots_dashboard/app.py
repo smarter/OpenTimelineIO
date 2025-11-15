@@ -170,25 +170,44 @@ def create_app(
                                     start_seconds = float(start_time.value) / float(start_time.rate)
                                     duration_seconds_clip = float(duration_clip.value) / float(duration_clip.rate)
 
+                                    # Get source range for merging logic
+                                    source_start = None
+                                    source_end = None
+                                    if item.source_range:
+                                        source_start = float(item.source_range.start_time.value) / float(item.source_range.start_time.rate)
+                                        source_duration = float(item.source_range.duration.value) / float(item.source_range.duration.rate)
+                                        source_end = source_start + source_duration
+
                                     clips_data.append({
                                         "name": item.name or "Unnamed Clip",
                                         "start": start_seconds,
                                         "duration": duration_seconds_clip,
-                                        "end": start_seconds + duration_seconds_clip
+                                        "end": start_seconds + duration_seconds_clip,
+                                        "source_start": source_start,
+                                        "source_end": source_end
                                     })
 
-                            # Merge adjacent clips with the same name
+                            # Merge adjacent clips with the same name and continuous source ranges
                             merged_clips = []
                             for clip in clips_data:
                                 if merged_clips and \
                                    merged_clips[-1]["name"] == clip["name"] and \
-                                   abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:  # Within 0.01s tolerance
-                                    # Extend the previous clip
+                                   abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
+                                   merged_clips[-1]["source_end"] is not None and \
+                                   clip["source_start"] is not None and \
+                                   abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
+                                    # Extend the previous clip (timeline and source ranges are continuous)
                                     merged_clips[-1]["end"] = clip["end"]
                                     merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
+                                    merged_clips[-1]["source_end"] = clip["source_end"]
                                 else:
                                     # Add as new clip
                                     merged_clips.append(clip)
+
+                            # Remove source range info before sending to client
+                            for clip in merged_clips:
+                                clip.pop("source_start", None)
+                                clip.pop("source_end", None)
 
                             clips_data = merged_clips
 
@@ -509,25 +528,44 @@ def create_app(
                         start_seconds = float(start_time.value) / float(start_time.rate)
                         duration_seconds_clip = float(duration.value) / float(duration.rate)
 
+                        # Get source range for merging logic
+                        source_start = None
+                        source_end = None
+                        if item.source_range:
+                            source_start = float(item.source_range.start_time.value) / float(item.source_range.start_time.rate)
+                            source_duration = float(item.source_range.duration.value) / float(item.source_range.duration.rate)
+                            source_end = source_start + source_duration
+
                         clips_data.append({
                             "name": item.name or "Unnamed Clip",
                             "start": start_seconds,
                             "duration": duration_seconds_clip,
-                            "end": start_seconds + duration_seconds_clip
+                            "end": start_seconds + duration_seconds_clip,
+                            "source_start": source_start,
+                            "source_end": source_end
                         })
 
-                # Merge adjacent clips with the same name
+                # Merge adjacent clips with the same name and continuous source ranges
                 merged_clips = []
                 for clip in clips_data:
                     if merged_clips and \
                        merged_clips[-1]["name"] == clip["name"] and \
-                       abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:  # Within 0.01s tolerance
-                        # Extend the previous clip
+                       abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
+                       merged_clips[-1]["source_end"] is not None and \
+                       clip["source_start"] is not None and \
+                       abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
+                        # Extend the previous clip (timeline and source ranges are continuous)
                         merged_clips[-1]["end"] = clip["end"]
                         merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
+                        merged_clips[-1]["source_end"] = clip["source_end"]
                     else:
                         # Add as new clip
                         merged_clips.append(clip)
+
+                # Remove source range info before sending to client
+                for clip in merged_clips:
+                    clip.pop("source_start", None)
+                    clip.pop("source_end", None)
 
                 clips_data = merged_clips
 
