@@ -187,27 +187,41 @@ def create_app(
                                         "source_end": source_end
                                     })
 
-                            # Merge adjacent clips with the same name and continuous source ranges
+                            # Merge adjacent clips with the same name (preserving segment info)
                             merged_clips = []
                             for clip in clips_data:
                                 if merged_clips and \
                                    merged_clips[-1]["name"] == clip["name"] and \
-                                   abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
-                                   merged_clips[-1]["source_end"] is not None and \
-                                   clip["source_start"] is not None and \
-                                   abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
-                                    # Extend the previous clip (timeline and source ranges are continuous)
+                                   abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:
+                                    # Extend the previous clip (adjacent clips with same source)
                                     merged_clips[-1]["end"] = clip["end"]
                                     merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
-                                    merged_clips[-1]["source_end"] = clip["source_end"]
+                                    # Add segment info
+                                    if "segments" not in merged_clips[-1]:
+                                        # Convert first clip to segments format
+                                        merged_clips[-1]["segments"] = [{
+                                            "timeline_start": merged_clips[-1]["start"],
+                                            "timeline_end": merged_clips[-1]["segments_end"] if "segments_end" in merged_clips[-1] else clip["start"],
+                                            "source_start": merged_clips[-1]["source_start"],
+                                            "source_end": merged_clips[-1]["source_end"]
+                                        }]
+                                    # Add current clip as a segment
+                                    merged_clips[-1]["segments"].append({
+                                        "timeline_start": clip["start"],
+                                        "timeline_end": clip["end"],
+                                        "source_start": clip["source_start"],
+                                        "source_end": clip["source_end"]
+                                    })
+                                    merged_clips[-1]["segments_end"] = clip["end"]
                                 else:
                                     # Add as new clip
-                                    merged_clips.append(clip)
+                                    merged_clips.append(clip.copy())
 
-                            # Remove source range info before sending to client
+                            # Clean up temporary fields but keep segments
                             for clip in merged_clips:
                                 clip.pop("source_start", None)
                                 clip.pop("source_end", None)
+                                clip.pop("segments_end", None)
 
                             clips_data = merged_clips
 
@@ -545,27 +559,41 @@ def create_app(
                             "source_end": source_end
                         })
 
-                # Merge adjacent clips with the same name and continuous source ranges
+                # Merge adjacent clips with the same name (preserving segment info)
                 merged_clips = []
                 for clip in clips_data:
                     if merged_clips and \
                        merged_clips[-1]["name"] == clip["name"] and \
-                       abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
-                       merged_clips[-1]["source_end"] is not None and \
-                       clip["source_start"] is not None and \
-                       abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
-                        # Extend the previous clip (timeline and source ranges are continuous)
+                       abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:
+                        # Extend the previous clip (adjacent clips with same source)
                         merged_clips[-1]["end"] = clip["end"]
                         merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
-                        merged_clips[-1]["source_end"] = clip["source_end"]
+                        # Add segment info
+                        if "segments" not in merged_clips[-1]:
+                            # Convert first clip to segments format
+                            merged_clips[-1]["segments"] = [{
+                                "timeline_start": merged_clips[-1]["start"],
+                                "timeline_end": merged_clips[-1]["segments_end"] if "segments_end" in merged_clips[-1] else clip["start"],
+                                "source_start": merged_clips[-1]["source_start"],
+                                "source_end": merged_clips[-1]["source_end"]
+                            }]
+                        # Add current clip as a segment
+                        merged_clips[-1]["segments"].append({
+                            "timeline_start": clip["start"],
+                            "timeline_end": clip["end"],
+                            "source_start": clip["source_start"],
+                            "source_end": clip["source_end"]
+                        })
+                        merged_clips[-1]["segments_end"] = clip["end"]
                     else:
                         # Add as new clip
-                        merged_clips.append(clip)
+                        merged_clips.append(clip.copy())
 
-                # Remove source range info before sending to client
+                # Clean up temporary fields but keep segments
                 for clip in merged_clips:
                     clip.pop("source_start", None)
                     clip.pop("source_end", None)
+                    clip.pop("segments_end", None)
 
                 clips_data = merged_clips
 
