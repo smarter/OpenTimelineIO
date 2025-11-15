@@ -455,7 +455,11 @@ class ClipPreviewGenerator:
 
         # Add the final filter for the remaining speed
         if abs(remaining_speed - 1.0) > 0.01:  # Only add if not 1.0
-            filters.append(f"atempo={remaining_speed:.6f}")
+            # Use clean format for exact values
+            if abs(remaining_speed - round(remaining_speed, 1)) < 0.001:
+                filters.append(f"atempo={remaining_speed:.1f}")
+            else:
+                filters.append(f"atempo={remaining_speed:.6f}")
 
         if not filters:
             # No speed change needed
