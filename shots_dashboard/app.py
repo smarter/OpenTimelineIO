@@ -193,7 +193,7 @@ def create_app(
                                 })
 
                         timeline_visual = {
-                            "name": timeline.name,
+                            "name": tracker.state.timeline_path.name,
                             "duration": duration_seconds,
                             "tracks": tracks_data
                         }
@@ -519,7 +519,7 @@ def create_app(
             return jsonify({
                 "success": True,
                 "timeline": {
-                    "name": timeline.name,
+                    "name": tracker.state.timeline_path.name,
                     "duration": duration_seconds,
                     "tracks": tracks_data
                 }
