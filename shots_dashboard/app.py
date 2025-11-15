@@ -817,6 +817,12 @@ def create_app(
             logger.info(f"   ✓ Found {len(transitions)} media files")
             logger.debug(f"Media files found: {[t.path.name for t in transitions[:10]]}")
 
+            # If we already loaded a timeline, re-run update_from_timeline to mark files as IN_USE
+            if tracker.state.timeline_path and tracker.state.timeline_path.exists():
+                logger.info(f"   🔄 Re-evaluating file states against timeline: {tracker.state.timeline_path.name}")
+                timeline_transitions = tracker.update_from_timeline(tracker.state.timeline_path)
+                logger.info(f"   ✓ {len(timeline_transitions)} files marked as IN_USE")
+
             # Emit state update
             emit_state_update('scan_complete')
         except Exception as e:
