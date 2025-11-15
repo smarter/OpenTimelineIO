@@ -261,6 +261,13 @@ body {
     font-size: 1.3rem;
 }
 
+.sequence-name {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: normal;
+    margin-left: 0.5rem;
+}
+
 /* Toggle Switch */
 .toggle-switch {
     display: flex;

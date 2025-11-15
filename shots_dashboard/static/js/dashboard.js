@@ -242,10 +242,17 @@ class ShotsDashboard {
 
     renderVisualTimeline(timelineData) {
         const container = document.getElementById('timeline-visual-canvas');
+        const sequenceNameEl = document.getElementById('sequence-name');
 
         if (!timelineData || !timelineData.tracks || timelineData.tracks.length === 0) {
             container.innerHTML = '<p class="empty-state">No timeline loaded yet</p>';
+            if (sequenceNameEl) sequenceNameEl.textContent = '';
             return;
+        }
+
+        // Update sequence name in header
+        if (sequenceNameEl && timelineData.name) {
+            sequenceNameEl.textContent = `- ${timelineData.name}`;
         }
 
         // Clear container
