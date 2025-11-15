@@ -16,9 +16,6 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app import create_app
-from database import Database
-from models import TrackerState
-from timeline_tracker import TimelineTracker
 
 
 def create_timeline_with_speed_effect(timeline_path: Path) -> None:
@@ -81,21 +78,14 @@ def test_timeline():
 
 
 @pytest.fixture
-def test_db_with_timeline(test_timeline):
-    """Create a test database with tracker state pointing to test timeline."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test_state.json"
-        db = Database(db_path)
-
-        # Create state with timeline
-        state = TrackerState()
-        state.timeline_path = test_timeline
-        db.save(state)
-
-        yield db_path
+def test_watch_dir(test_timeline):
+    """Create a watch directory with the test timeline."""
+    # The test timeline is already in a temp directory
+    # Just return its parent directory as the watch dir
+    yield test_timeline.parent
 
 
-def get_websocket_timeline_data(db_path):
+def get_websocket_timeline_data(watch_dir):
     """
     Get the timeline data that is actually emitted via WebSocket.
 
@@ -103,7 +93,8 @@ def get_websocket_timeline_data(db_path):
     """
     from app import create_app
 
-    app, socketio = create_app(db_path=db_path)
+    # Create app with watch_dir so it loads the timeline
+    app, socketio = create_app(watch_dir=watch_dir)
 
     # Use SocketIO test client to capture emissions
     client = socketio.test_client(app)
@@ -122,9 +113,9 @@ def get_websocket_timeline_data(db_path):
     return None
 
 
-def test_websocket_includes_speed_field(test_db_with_timeline):
+def test_websocket_includes_speed_field(test_watch_dir):
     """Test that WebSocket timeline data includes speed field."""
-    tracks = get_websocket_timeline_data(test_db_with_timeline)
+    tracks = get_websocket_timeline_data(test_watch_dir)
 
     assert tracks is not None, "Timeline data should not be None"
     assert len(tracks) > 0, "Should have at least one track"
@@ -141,9 +132,9 @@ def test_websocket_includes_speed_field(test_db_with_timeline):
     assert clip["speed"] is not None, "Speed field should not be None for clip with Time Remap effect"
 
 
-def test_websocket_speed_value_correct(test_db_with_timeline):
+def test_websocket_speed_value_correct(test_watch_dir):
     """Test that WebSocket speed value is correctly calculated."""
-    tracks = get_websocket_timeline_data(test_db_with_timeline)
+    tracks = get_websocket_timeline_data(test_watch_dir)
 
     clip = tracks[0]["clips"][0]
 
@@ -176,9 +167,9 @@ def test_websocket_speed_value_correct(test_db_with_timeline):
         f"Speed {clip['speed']:.3f} should be ~0.05 (20x slower)"
 
 
-def test_websocket_preserves_source_fields(test_db_with_timeline):
+def test_websocket_preserves_source_fields(test_watch_dir):
     """Test that WebSocket preserves source fields after merging logic."""
-    tracks = get_websocket_timeline_data(test_db_with_timeline)
+    tracks = get_websocket_timeline_data(test_watch_dir)
 
     clip = tracks[0]["clips"][0]
 

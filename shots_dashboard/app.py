@@ -184,8 +184,6 @@ def create_app(
                           for f in tracker.state.get_files_as_sequences(FileState.IN_USE)],
                 "removed": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
                            for f in tracker.state.get_files_as_sequences(FileState.REMOVED)],
-                "newer_project": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
-                                 for f in tracker.state.get_files_as_sequences(FileState.NEWER_PROJECT)],
             }
 
             # Get timeline history

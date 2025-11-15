@@ -25,12 +25,10 @@ class FileState(Enum):
     - NEW: File exists in directory but has never been in timeline
     - IN_USE: File is currently in the timeline
     - REMOVED: File was previously in timeline but is no longer present
-    - NEWER_PROJECT: File is in a Premiere Pro project newer than current timeline
     """
     NEW = auto()
     IN_USE = auto()
     REMOVED = auto()
-    NEWER_PROJECT = auto()
 
     def __str__(self) -> str:
         return self.name.lower()
@@ -176,10 +174,6 @@ class TrackerState:
         """Files previously in timeline but now removed."""
         return self.get_files_by_state(FileState.REMOVED)
 
-    @property
-    def newer_project_files(self) -> list[FileRecord]:
-        """Files in Premiere Pro projects newer than current timeline."""
-        return self.get_files_by_state(FileState.NEWER_PROJECT)
 
     def update_file(self, file_record: FileRecord) -> None:
         """Update or add a file record."""
