@@ -882,6 +882,11 @@ def main() -> None:
         action="store_true",
         help="Enable verbose logging for debugging"
     )
+    parser.add_argument(
+        "--no-reload",
+        action="store_true",
+        help="Disable auto-reload on code changes (enabled by default)"
+    )
 
     args = parser.parse_args()
 
@@ -923,7 +928,12 @@ def main() -> None:
     if args.demo:
         logger.info("\n💡 Demo mode is active! Sample data has been created.")
 
-    socketio.run(app, debug=True, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
+    # Enable auto-reload by default (debug=True) unless --no-reload is specified
+    enable_reload = not args.no_reload
+    if enable_reload:
+        logger.info("🔄 Auto-reload enabled - server will restart on code changes")
+
+    socketio.run(app, debug=enable_reload, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
 
 
 if __name__ == '__main__':
