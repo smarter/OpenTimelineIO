@@ -352,6 +352,7 @@ def create_app(
 
                         timeline_visual = {
                             "name": tracker.state.timeline_path.name,
+                            "sequence_name": timeline.name if timeline and hasattr(timeline, 'name') else None,
                             "duration": duration_seconds,
                             "tracks": tracks_data
                         }

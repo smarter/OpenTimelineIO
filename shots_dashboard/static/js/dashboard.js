@@ -272,8 +272,15 @@ class ShotsDashboard {
         // Add timeline header with name and duration
         const header = document.createElement('div');
         header.className = 'timeline-viz-header';
+
+        // Build timeline title display with optional sequence name
+        let titleDisplay = this.escapeHtml(timelineData.name);
+        if (timelineData.sequence_name) {
+            titleDisplay += ` <span class="sequence-name-info">- ${this.escapeHtml(timelineData.sequence_name)}</span>`;
+        }
+
         header.innerHTML = `
-            <div class="timeline-viz-title">${this.escapeHtml(timelineData.name)}</div>
+            <div class="timeline-viz-title">${titleDisplay}</div>
             <div class="timeline-viz-duration">Duration: ${this.formatDuration(duration)}</div>
         `;
         wrapper.appendChild(header);
