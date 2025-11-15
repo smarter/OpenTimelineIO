@@ -8,15 +8,12 @@
 </head>
 <body>
     <div class="container">
-        <div class="top-bar">
-            <div class="auto-refresh-indicator">
-                <span class="pulse-dot"></span>
-                <span class="auto-refresh-text">Auto-updating</span>
-            </div>
+        <div class="connection-indicator" title="Connected">
+            <span class="pulse-dot"></span>
         </div>
 
-        <div class="status-bar" id="status-bar">
-            <span id="status-text">Ready</span>
+        <div class="status-bar" id="status-bar" style="display: none;">
+            <span id="status-text"></span>
         </div>
 
         <div class="timeline-widget" id="timeline-widget">

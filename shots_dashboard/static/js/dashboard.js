@@ -117,13 +117,27 @@ class ShotsDashboard {
         const statusBar = document.getElementById('status-bar');
         const statusText = document.getElementById('status-text');
 
+        // Only show status bar for errors and loading, hide for "Ready" and "Connected"
+        if (message === 'Ready' || message === 'Connected') {
+            statusBar.style.display = 'none';
+            return;
+        }
+
         statusText.textContent = message;
         statusBar.className = 'status-bar';
+        statusBar.style.display = 'block';
 
         if (type === 'success') {
             statusBar.classList.add('success');
         } else if (type === 'error') {
             statusBar.classList.add('error');
+        }
+
+        // Auto-hide success messages after 3 seconds
+        if (type === 'success' || type === 'info') {
+            setTimeout(() => {
+                statusBar.style.display = 'none';
+            }, 3000);
         }
     }
 
