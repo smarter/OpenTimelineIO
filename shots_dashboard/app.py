@@ -45,6 +45,73 @@ except ImportError:
     )
 
 
+def get_actual_source_duration(item) -> tuple[float | None, float | None, float | None]:
+    """
+    Get the actual source start, end, and duration for a clip.
+
+    For clips with Time Remap effects, this extracts the actual media range being used,
+    not the timeline range. For normal clips, returns the source_range values.
+
+    Returns:
+        Tuple of (source_start, source_end, source_duration) in seconds, or (None, None, None)
+    """
+    if not hasattr(item, 'source_range') or not item.source_range:
+        return None, None, None
+
+    # Check for Time Remap effect
+    time_remap_effect = None
+    if hasattr(item, 'effects'):
+        for effect in item.effects:
+            if hasattr(effect, 'effect_name') or (
+                hasattr(effect, 'metadata') and
+                'fcp_xml' in effect.metadata and
+                effect.metadata['fcp_xml'].get('effectid') == 'timeremap'
+            ):
+                time_remap_effect = effect
+                break
+
+    if time_remap_effect and hasattr(time_remap_effect, 'metadata'):
+        # Extract source range from Time Remap effect
+        fcp_xml = time_remap_effect.metadata.get('fcp_xml', {})
+        parameters = fcp_xml.get('parameter', [])
+
+        # Look for graphdict parameter with keyframes
+        for param in parameters:
+            # Skip if param doesn't have dict-like behavior
+            if not hasattr(param, 'get'):
+                continue
+            try:
+                if param.get('parameterid') == 'graphdict' and 'keyframe' in param:
+                    keyframes = param['keyframe']
+                    if len(keyframes) >= 2:
+                        # First and last keyframes define the mapping
+                        # 'when' = timeline frame, 'value' = source frame
+                        first_kf = keyframes[0]
+                        last_kf = keyframes[-1]
+
+                        # Get source frame range
+                        source_start_frame = float(first_kf.get('value', 0))
+                        source_end_frame = float(last_kf.get('value', 0))
+
+                        # Convert to seconds using the source rate
+                        rate = float(item.source_range.start_time.rate)
+                        source_start = source_start_frame / rate
+                        source_end = source_end_frame / rate
+                        source_duration = abs(source_end - source_start)
+
+                        return source_start, source_end, source_duration
+            except (AttributeError, KeyError, TypeError):
+                # Skip parameters that don't have the expected structure
+                continue
+
+    # No Time Remap effect or couldn't parse it - use source_range
+    source_start = float(item.source_range.start_time.value) / float(item.source_range.start_time.rate)
+    source_duration = float(item.source_range.duration.value) / float(item.source_range.duration.rate)
+    source_end = source_start + source_duration
+
+    return source_start, source_end, source_duration
+
+
 def create_app(
     db_path: Path | None = None,
     watch_dir: Path | None = None,
@@ -177,13 +244,8 @@ def create_app(
                                     start_seconds = float(start_time.value) / float(start_time.rate)
                                     duration_seconds_clip = float(duration_clip.value) / float(duration_clip.rate)
 
-                                    # Get source range for merging logic
-                                    source_start = None
-                                    source_end = None
-                                    if item.source_range:
-                                        source_start = float(item.source_range.start_time.value) / float(item.source_range.start_time.rate)
-                                        source_duration = float(item.source_range.duration.value) / float(item.source_range.duration.rate)
-                                        source_end = source_start + source_duration
+                                    # Get actual source range (considers Time Remap effects)
+                                    source_start, source_end, source_duration = get_actual_source_duration(item)
 
                                     clips_data.append({
                                         "name": item.name or "Unnamed Clip",
@@ -554,14 +616,8 @@ def create_app(
                         start_seconds = float(start_time.value) / float(start_time.rate)
                         duration_seconds_clip = float(duration.value) / float(duration.rate)
 
-                        # Get source range for merging logic
-                        source_start = None
-                        source_end = None
-                        source_duration = None
-                        if item.source_range:
-                            source_start = float(item.source_range.start_time.value) / float(item.source_range.start_time.rate)
-                            source_duration = float(item.source_range.duration.value) / float(item.source_range.duration.rate)
-                            source_end = source_start + source_duration
+                        # Get actual source range (considers Time Remap effects)
+                        source_start, source_end, source_duration = get_actual_source_duration(item)
 
                         # Calculate speed factor (source_duration / timeline_duration)
                         # speed > 1.0: sped up, speed < 1.0: slowed down, speed = 1.0: normal
