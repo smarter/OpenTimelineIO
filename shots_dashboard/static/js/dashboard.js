@@ -533,6 +533,7 @@ class ShotsDashboard {
         this.videoSource = document.getElementById('video-preview-source');
         this.audioPlayer = document.getElementById('audio-preview-player');
         this.audioSource = document.getElementById('audio-preview-source');
+        this.imagePlayer = document.getElementById('image-preview-player');
         this.previewFilename = document.getElementById('video-preview-filename');
     }
 
@@ -540,6 +541,12 @@ class ShotsDashboard {
         const ext = filename.toLowerCase().split('.').pop();
         const audioExtensions = ['wav', 'mp3', 'ogg', 'oga', 'm4a', 'aiff', 'aif', 'flac', 'aac'];
         return audioExtensions.includes(ext);
+    }
+
+    isImageFile(filename) {
+        const ext = filename.toLowerCase().split('.').pop();
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+        return imageExtensions.includes(ext);
     }
 
     showVideoPreview(filename, element) {
@@ -556,13 +563,14 @@ class ShotsDashboard {
             this.previewPopup.classList.add('loading');
             this.previewFilename.textContent = filename;
 
-            // Determine if audio or video
+            // Determine media type
             const isAudio = this.isAudioFile(filename);
+            const isImage = this.isImageFile(filename);
 
             // Position popup near the element
             const rect = element.getBoundingClientRect();
             const popupWidth = 400;
-            const popupHeight = isAudio ? 100 : 300;  // Shorter for audio
+            const popupHeight = isAudio ? 100 : (isImage ? 350 : 300);  // Adjust for different types
 
             // Position to the right of element, or left if not enough space
             let left = rect.right + 10;
@@ -598,10 +606,27 @@ class ShotsDashboard {
             };
             const mimeType = mimeTypes[ext] || 'video/webm';
 
-            // Show appropriate player and hide the other
-            if (isAudio) {
+            // Show appropriate player and hide the others
+            if (isImage) {
+                this.imagePlayer.style.display = 'block';
+                this.audioPlayer.style.display = 'none';
+                this.videoPlayer.style.display = 'none';
+
+                // Load image
+                this.imagePlayer.src = `/api/preview/${encodeURIComponent(filename)}`;
+
+                this.imagePlayer.onload = () => {
+                    this.previewPopup.classList.remove('loading');
+                };
+
+                this.imagePlayer.onerror = () => {
+                    console.error('Failed to load image preview');
+                    this.hideVideoPreview();
+                };
+            } else if (isAudio) {
                 this.audioPlayer.style.display = 'block';
                 this.videoPlayer.style.display = 'none';
+                this.imagePlayer.style.display = 'none';
 
                 // Load audio
                 this.audioSource.type = mimeType;
@@ -623,6 +648,7 @@ class ShotsDashboard {
             } else {
                 this.videoPlayer.style.display = 'block';
                 this.audioPlayer.style.display = 'none';
+                this.imagePlayer.style.display = 'none';
 
                 // Load video
                 this.videoSource.type = mimeType;
@@ -653,19 +679,21 @@ class ShotsDashboard {
 
         this.previewPopup.style.display = 'none';
 
-        // Pause and clear both players
+        // Pause and clear all players
         this.videoPlayer.pause();
         this.audioPlayer.pause();
 
         // Clear sources to stop any loading/downloading
         this.videoSource.src = '';
         this.audioSource.src = '';
+        this.imagePlayer.src = '';
         this.videoPlayer.load();
         this.audioPlayer.load();
 
-        // Hide both players
+        // Hide all players
         this.videoPlayer.style.display = 'none';
         this.audioPlayer.style.display = 'none';
+        this.imagePlayer.style.display = 'none';
 
         this.currentPreviewFilename = null;
         this.previewPopup.classList.remove('loading');

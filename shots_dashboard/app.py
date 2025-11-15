@@ -561,6 +561,16 @@ def create_app(
                     mimetype = 'audio/mpeg'
                 elif ext == '.m4a':
                     mimetype = 'audio/mp4'
+                elif ext in {'.jpg', '.jpeg'}:
+                    mimetype = 'image/jpeg'
+                elif ext == '.png':
+                    mimetype = 'image/png'
+                elif ext == '.gif':
+                    mimetype = 'image/gif'
+                elif ext == '.webp':
+                    mimetype = 'image/webp'
+                elif ext == '.svg':
+                    mimetype = 'image/svg+xml'
                 else:
                     mimetype = 'application/octet-stream'
 

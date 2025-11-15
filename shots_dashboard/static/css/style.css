@@ -557,6 +557,16 @@ input[type="text"]:focus {
     border-radius: 4px;
 }
 
+.image-preview-player {
+    width: 100%;
+    height: auto;
+    max-height: 300px;
+    display: block;
+    object-fit: contain;
+    background: #000;
+    border-radius: 4px;
+}
+
 .video-preview-loading {
     position: absolute;
     top: 50%;

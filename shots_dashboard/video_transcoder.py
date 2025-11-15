@@ -131,11 +131,16 @@ def is_web_compatible(file_path: Path) -> bool:
     # Web-compatible formats
     web_video_formats = {'.mp4', '.webm', '.ogg', '.ogv'}
     web_audio_formats = {'.mp3', '.m4a', '.ogg', '.oga'}
+    web_image_formats = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
 
-    if ext not in (web_video_formats | web_audio_formats):
+    if ext not in (web_video_formats | web_audio_formats | web_image_formats):
         return False
 
-    # Check codecs using ffprobe
+    # Images are always compatible (no codec check needed)
+    if ext in web_image_formats:
+        return True
+
+    # Check codecs using ffprobe for video/audio files
     try:
         if not check_ffmpeg_available():
             # If ffprobe unavailable, assume web-compatible based on extension
