@@ -47,11 +47,15 @@ class ShotsDashboard {
     }
 
     updateFiles(files) {
+        console.log('updateFiles called with:', files);
+        console.log('new_video:', files.new_video ? files.new_video.length : 'undefined');
+        console.log('new_audio:', files.new_audio ? files.new_audio.length : 'undefined');
+
         this.renderFileList('files-new-video', files.new_video || [], 'count-new-video');
         this.renderFileList('files-new-audio', files.new_audio || [], 'count-new-audio');
-        this.renderFileList('files-in-use', files.in_use, 'count-in-use');
+        this.renderFileList('files-in-use', files.in_use || [], 'count-in-use');
         this.renderFileList('files-newer-project', files.newer_project || [], 'count-newer-project');
-        this.renderFileList('files-removed', files.removed, 'count-removed');
+        this.renderFileList('files-removed', files.removed || [], 'count-removed');
     }
 
     renderFileList(containerId, files, countId) {
