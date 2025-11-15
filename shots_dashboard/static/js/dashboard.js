@@ -672,6 +672,7 @@ class ShotsDashboard {
     }
 
     attachPreviewHandlers(element, filename) {
+        // Hover to show preview popup
         element.addEventListener('mouseenter', (e) => {
             this.showVideoPreview(filename, element);
         });
@@ -679,6 +680,16 @@ class ShotsDashboard {
         element.addEventListener('mouseleave', () => {
             this.hideVideoPreview();
         });
+
+        // Click to open preview in new tab
+        element.addEventListener('click', (e) => {
+            e.preventDefault();
+            const previewUrl = `/api/preview/${encodeURIComponent(filename)}`;
+            window.open(previewUrl, '_blank');
+        });
+
+        // Make it look clickable
+        element.style.cursor = 'pointer';
     }
 }
 
