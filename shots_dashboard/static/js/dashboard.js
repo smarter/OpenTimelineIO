@@ -188,10 +188,17 @@ class ShotsDashboard {
             const path = history.current.timeline_path;
             const filename = path ? path.split('/').pop() : 'Unknown';
             const timestamp = history.current.timestamp ? this.formatTime(history.current.timestamp) : '';
+            const sequenceName = history.current.sequence_name;
+
+            // Build timeline path display with optional sequence name
+            let pathDisplay = this.escapeHtml(filename);
+            if (sequenceName) {
+                pathDisplay += ` <span class="sequence-name-info">- ${this.escapeHtml(sequenceName)}</span>`;
+            }
 
             currentInfo.innerHTML = `
                 <p><strong>${history.current.clips.length} clips</strong> in current timeline</p>
-                <p class="timeline-path">${this.escapeHtml(filename)}</p>
+                <p class="timeline-path">${pathDisplay}</p>
                 <p class="timeline-timestamp">Updated ${timestamp}</p>
             `;
 
@@ -242,17 +249,10 @@ class ShotsDashboard {
 
     renderVisualTimeline(timelineData) {
         const container = document.getElementById('timeline-visual-canvas');
-        const sequenceNameEl = document.getElementById('sequence-name');
 
         if (!timelineData || !timelineData.tracks || timelineData.tracks.length === 0) {
             container.innerHTML = '<p class="empty-state">No timeline loaded yet</p>';
-            if (sequenceNameEl) sequenceNameEl.textContent = '';
             return;
-        }
-
-        // Update sequence name in header
-        if (sequenceNameEl && timelineData.name) {
-            sequenceNameEl.textContent = `- ${timelineData.name}`;
         }
 
         // Clear container

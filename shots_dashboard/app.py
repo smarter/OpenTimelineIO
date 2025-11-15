@@ -186,6 +186,22 @@ def create_app(
                            for f in tracker.state.get_files_as_sequences(FileState.REMOVED)],
             }
 
+            # Get sequence name from .prproj if applicable
+            sequence_name = None
+            if tracker.state.timeline_path and tracker.state.timeline_path.exists():
+                if tracker.state.timeline_path.suffix.lower() == '.prproj':
+                    try:
+                        import opentimelineio as otio
+                        import otio_prproj_adapter
+                        timeline_temp = otio_prproj_adapter.read_from_file(str(tracker.state.timeline_path))
+                        if not isinstance(timeline_temp, otio.schema.Timeline):
+                            sequences_temp = list(timeline_temp)
+                            timeline_temp = sequences_temp[-1] if len(sequences_temp) > 0 else None
+                        if timeline_temp:
+                            sequence_name = timeline_temp.name
+                    except Exception:
+                        pass  # Will try again when loading visual timeline
+
             # Get timeline history
             history = tracker.state.timeline_history
             current_snapshot = history.get_current()
@@ -196,7 +212,8 @@ def create_app(
                 "current": {
                     "timeline_path": str(current_snapshot.timeline_path) if current_snapshot else None,
                     "timestamp": current_snapshot.timestamp.isoformat() if current_snapshot else None,
-                    "clips": list(current_snapshot.clip_names) if current_snapshot else []
+                    "clips": list(current_snapshot.clip_names) if current_snapshot else [],
+                    "sequence_name": sequence_name
                 } if current_snapshot else None,
                 "historical_clips": sorted(list(historical_clips)),
                 "snapshots": [
