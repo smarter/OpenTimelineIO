@@ -6,6 +6,7 @@ Provides REST API and web interface for tracking timeline file usage.
 
 from __future__ import annotations
 
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,9 @@ from typing import Any
 
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context
 from flask_socketio import SocketIO, emit
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Try relative imports first (when used as package), fall back to absolute
 try:
@@ -33,8 +37,10 @@ except ImportError:
     from timeline_watcher import TimelineWatcher, MediaWatcher
     from video_transcoder import (
         is_web_compatible,
+        is_audio_only,
         check_ffmpeg_available,
         stream_transcode_webm,
+        transcode_to_ogg,
         TranscodingError
     )
 
@@ -177,9 +183,8 @@ def create_app(
                             "tracks": tracks_data
                         }
                 except Exception as e:
-                    print(f"⚠️  Error extracting timeline visual data: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.warning(f"⚠️  Error extracting timeline visual data: {e}")
+                    logger.debug("Timeline visual extraction error:", exc_info=True)
                     # Timeline visual data is optional, continue without it
 
             # Emit to all connected clients
@@ -495,86 +500,149 @@ def create_app(
     @app.route('/api/preview/<path:filename>')
     def api_preview(filename: str) -> Response | tuple[Any, int]:
         """
-        Serve video clip preview with on-the-fly transcoding if needed.
+        Serve media clip preview with on-the-fly transcoding if needed.
 
         For web-compatible formats (mp4, webm, ogg), serves file directly.
-        For other formats, transcodes to WebM (VP8/Vorbis) in real-time.
+        For audio-only files, transcodes to OGG Vorbis.
+        For video files, transcodes to WebM (VP8/Vorbis).
 
         Args:
             filename: Name of the clip file to preview
 
         Returns:
-            Video stream (WebM format)
+            Media stream (OGG or WebM format)
         """
         try:
+            logger.debug(f"Preview request for: {filename}")
             tracker = get_tracker()
 
             # Find file in tracked files
+            logger.debug(f"Searching through {len(tracker.state.files)} tracked files")
             file_path = None
             for record in tracker.state.files.values():
                 if record.path.name == filename:
                     file_path = record.path
+                    logger.debug(f"Found match: {file_path}")
                     break
 
-            if file_path is None or not file_path.exists():
+            if file_path is None:
+                logger.warning(f"File not found in tracked files: {filename}")
+                logger.debug(f"Available files: {[r.path.name for r in list(tracker.state.files.values())[:10]]}")
                 return jsonify({
                     "success": False,
                     "error": f"File not found: {filename}"
                 }), 404
 
+            if not file_path.exists():
+                logger.warning(f"File path exists in tracker but not on disk: {file_path}")
+                return jsonify({
+                    "success": False,
+                    "error": f"File not found on disk: {filename}"
+                }), 404
+
             # Check if web-compatible
             if is_web_compatible(file_path):
+                logger.debug(f"Serving web-compatible file directly: {file_path.suffix}")
                 # Serve directly
                 def generate():
                     with open(file_path, 'rb') as f:
                         while chunk := f.read(8192):
                             yield chunk
 
+                # Determine appropriate MIME type
+                ext = file_path.suffix.lower()
+                if ext == '.webm':
+                    mimetype = 'video/webm'
+                elif ext == '.mp4':
+                    mimetype = 'video/mp4'
+                elif ext in {'.ogg', '.oga'}:
+                    mimetype = 'audio/ogg'
+                elif ext == '.mp3':
+                    mimetype = 'audio/mpeg'
+                elif ext == '.wav':
+                    mimetype = 'audio/wav'
+                elif ext == '.m4a':
+                    mimetype = 'audio/mp4'
+                else:
+                    mimetype = 'application/octet-stream'
+
                 return Response(
                     stream_with_context(generate()),
-                    mimetype='video/webm' if file_path.suffix == '.webm' else 'video/mp4',
+                    mimetype=mimetype,
                     headers={
                         'Accept-Ranges': 'bytes',
-                        'Content-Type': 'video/webm' if file_path.suffix == '.webm' else 'video/mp4'
+                        'Content-Type': mimetype
                     }
                 )
 
             # Check if ffmpeg is available
+            logger.debug(f"File requires transcoding: {file_path.suffix}")
             if not check_ffmpeg_available():
+                logger.error("ffmpeg not available for transcoding")
                 return jsonify({
                     "success": False,
-                    "error": "Video transcoding not available (ffmpeg not installed)"
+                    "error": "Media transcoding not available (ffmpeg not installed)"
                 }), 503
 
-            # Transcode on-the-fly to WebM
-            try:
-                process = stream_transcode_webm(file_path)
+            # Check if audio-only file
+            audio_only = is_audio_only(file_path)
 
-                def generate():
-                    try:
-                        while True:
-                            chunk = process.stdout.read(8192)
-                            if not chunk:
-                                break
-                            yield chunk
-                    finally:
-                        process.terminate()
-                        process.wait()
+            if audio_only:
+                # Transcode to OGG Vorbis for audio-only files
+                logger.debug(f"Starting audio transcode to OGG: {file_path}")
+                try:
+                    output_path = transcode_to_ogg(file_path)
 
-                return Response(
-                    stream_with_context(generate()),
-                    mimetype='video/webm',
-                    headers={
-                        'Content-Type': 'video/webm',
-                        'Cache-Control': 'no-cache'
-                    }
-                )
+                    def generate():
+                        with open(output_path, 'rb') as f:
+                            while chunk := f.read(8192):
+                                yield chunk
 
-            except TranscodingError as e:
-                return jsonify({
-                    "success": False,
-                    "error": f"Transcoding failed: {str(e)}"
-                }), 500
+                    return Response(
+                        stream_with_context(generate()),
+                        mimetype='audio/ogg',
+                        headers={
+                            'Content-Type': 'audio/ogg',
+                            'Accept-Ranges': 'bytes'
+                        }
+                    )
+
+                except TranscodingError as e:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Audio transcoding failed: {str(e)}"
+                    }), 500
+            else:
+                # Transcode on-the-fly to WebM for video files
+                logger.debug(f"Starting video transcode to WebM: {file_path}")
+                try:
+                    process = stream_transcode_webm(file_path)
+
+                    def generate():
+                        try:
+                            while True:
+                                chunk = process.stdout.read(8192)
+                                if not chunk:
+                                    break
+                                yield chunk
+                        finally:
+                            process.terminate()
+                            process.wait()
+
+                    return Response(
+                        stream_with_context(generate()),
+                        mimetype='video/webm',
+                        headers={
+                            'Content-Type': 'video/webm',
+                            'Cache-Control': 'no-cache'
+                        }
+                    )
+
+                except TranscodingError as e:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Video transcoding failed: {str(e)}"
+                    }), 500
 
         except Exception as e:
             return jsonify({
@@ -604,14 +672,14 @@ def create_app(
     @socketio.on('connect')
     def handle_connect() -> None:
         """Handle client connection."""
-        print("Client connected")
+        logger.info("Client connected")
         # Send current state to newly connected client
         emit_state_update('initial_state')
 
     @socketio.on('disconnect')
     def handle_disconnect() -> None:
         """Handle client disconnection."""
-        print("Client disconnected")
+        logger.info("Client disconnected")
 
     @socketio.on('request_state')
     def handle_request_state() -> None:
@@ -620,7 +688,8 @@ def create_app(
 
     # Scan for timeline files and load most recent if watch_dir is provided
     if watch_dir:
-        print(f"📝 Scanning for timeline files in: {watch_dir}")
+        logger.info(f"📝 Scanning for timeline files in: {watch_dir}")
+        logger.debug(f"Timeline scan directory: {watch_dir}")
         try:
             # Find all timeline files (non-recursive, top level only)
             timeline_files = []
@@ -628,33 +697,39 @@ def create_app(
                 timeline_files.extend(watch_dir.glob(f'*{ext}'))
                 timeline_files.extend(watch_dir.glob(f'*{ext.upper()}'))
 
+            logger.debug(f"Found timeline files: {[f.name for f in timeline_files]}")
+
             if timeline_files:
                 # Sort by modification time, most recent first
                 timeline_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
                 most_recent = timeline_files[0]
 
-                print(f"   Found {len(timeline_files)} timeline(s)")
-                print(f"   Loading most recent: {most_recent.name}")
+                logger.info(f"   Found {len(timeline_files)} timeline(s)")
+                logger.info(f"   Loading most recent: {most_recent.name}")
+                logger.debug(f"Most recent timeline: {most_recent} (mtime: {most_recent.stat().st_mtime})")
 
                 tracker = get_tracker()
                 transitions = tracker.update_from_timeline(most_recent)
                 save_tracker(tracker)
 
-                print(f"   ✓ Loaded {most_recent.name}")
-                print(f"   {len(transitions)} state transitions")
+                logger.info(f"   ✓ Loaded {most_recent.name}")
+                logger.info(f"   {len(transitions)} state transitions")
+                logger.debug(f"State transitions: {[(t.path.name, t.old_state, t.new_state) for t in transitions[:5]]}")
 
                 # Emit state update
                 emit_state_update('timeline_update_complete')
             else:
-                print(f"   No timeline files found")
+                logger.info(f"   No timeline files found")
+                logger.warning(f"No .otio or .xml files in {watch_dir}")
         except Exception as e:
-            print(f"   ✗ Error scanning timelines: {e}")
+            logger.error(f"   ✗ Error scanning timelines: {e}")
+            logger.exception(f"Timeline scan error: {e}")
 
         # Set up timeline watcher
         def on_timeline_file_detected(timeline_path: Path) -> None:
             """Handle new or modified timeline file."""
             try:
-                print(f"📝 Detected timeline file: {timeline_path.name}")
+                logger.info(f"📝 Detected timeline file: {timeline_path.name}")
                 tracker = get_tracker()
                 transitions = tracker.update_from_timeline(timeline_path)
                 save_tracker(tracker)
@@ -662,10 +737,10 @@ def create_app(
                 # Emit state update
                 emit_state_update('timeline_update_complete')
 
-                print(f"   ✓ Updated from {timeline_path.name}")
-                print(f"   {len(transitions)} state transitions")
+                logger.info(f"   ✓ Updated from {timeline_path.name}")
+                logger.info(f"   {len(transitions)} state transitions")
             except Exception as e:
-                print(f"   ✗ Error processing {timeline_path.name}: {e}")
+                logger.error(f"   ✗ Error processing {timeline_path.name}: {e}")
 
         timeline_watcher = TimelineWatcher(watch_dir, on_timeline_file_detected)
         timeline_watcher.start()
@@ -673,25 +748,28 @@ def create_app(
 
     # Perform initial recursive scan if media_dir is provided
     if media_dir:
-        print(f"📁 Scanning media directory: {media_dir}")
+        logger.info(f"📁 Scanning media directory: {media_dir}")
+        logger.debug(f"Media scan directory: {media_dir}")
         try:
             tracker = get_tracker()
             transitions = tracker.scan_directory(media_dir)
             save_tracker(tracker)
 
-            print(f"   ✓ Found {len(transitions)} media files")
+            logger.info(f"   ✓ Found {len(transitions)} media files")
+            logger.debug(f"Media files found: {[t.path.name for t in transitions[:10]]}")
 
             # Emit state update
             emit_state_update('scan_complete')
         except Exception as e:
-            print(f"   ✗ Error scanning directory: {e}")
+            logger.error(f"   ✗ Error scanning directory: {e}")
+            logger.exception(f"Media scan error: {e}")
 
     # Set up media watcher if media_dir is provided
     if media_dir:
         def on_media_file_detected(media_path: Path) -> None:
             """Handle new media file."""
             try:
-                print(f"🎬 Detected media file: {media_path.name}")
+                logger.info(f"🎬 Detected media file: {media_path.name}")
                 tracker = get_tracker()
 
                 # Track the new file by scanning its parent directory
@@ -702,10 +780,10 @@ def create_app(
                 # Emit state update
                 if transitions:
                     emit_state_update('scan_complete')
-                    print(f"   ✓ Tracked new file: {media_path.name}")
-                    print(f"   File state: NEW")
+                    logger.info(f"   ✓ Tracked new file: {media_path.name}")
+                    logger.info(f"   File state: NEW")
             except Exception as e:
-                print(f"   ✗ Error tracking {media_path.name}: {e}")
+                logger.error(f"   ✗ Error tracking {media_path.name}: {e}")
 
         media_watcher = MediaWatcher(media_dir, on_media_file_detected)
         media_watcher.start()
@@ -754,8 +832,28 @@ def main() -> None:
         default=None,
         help="Directory to recursively scan and watch for media files"
     )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose logging for debugging"
+    )
 
     args = parser.parse_args()
+
+    # Configure logging based on verbose flag
+    if args.verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        logger.info("Verbose logging enabled")
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(message)s'
+        )
 
     if args.demo:
         # Run visual demo mode (server + scenario playback)
@@ -774,12 +872,12 @@ def main() -> None:
         # Normal mode
         app, socketio = create_app(watch_dir=args.watch_dir, media_dir=args.media_dir)
 
-    print("Starting Shots Dashboard...")
-    print(f"Database: {app.config['DATABASE_PATH']}")
-    print(f"Navigate to http://localhost:{args.port}")
+    logger.info("Starting Shots Dashboard...")
+    logger.info(f"Database: {app.config['DATABASE_PATH']}")
+    logger.info(f"Navigate to http://localhost:{args.port}")
 
     if args.demo:
-        print("\n💡 Demo mode is active! Sample data has been created.")
+        logger.info("\n💡 Demo mode is active! Sample data has been created.")
 
     socketio.run(app, debug=True, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
 

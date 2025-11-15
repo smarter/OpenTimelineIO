@@ -7,12 +7,15 @@ updates the tracker state when changes are detected.
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Callable, Set
 
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from watchdog.observers import Observer
+
+logger = logging.getLogger(__name__)
 
 
 class FileWatcherHandler(FileSystemEventHandler):
@@ -88,7 +91,7 @@ class TimelineWatcher:
         self.watch_dir.mkdir(parents=True, exist_ok=True)
         self.observer.schedule(self.handler, str(self.watch_dir), recursive=False)
         self.observer.start()
-        print(f"📁 Watching for timeline files in: {self.watch_dir}")
+        logger.info(f"📁 Watching for timeline files in: {self.watch_dir}")
 
     def stop(self) -> None:
         """Stop watching the directory."""
@@ -131,7 +134,7 @@ class MediaWatcher:
         self.watch_dir.mkdir(parents=True, exist_ok=True)
         self.observer.schedule(self.handler, str(self.watch_dir), recursive=True)
         self.observer.start()
-        print(f"📁 Watching for media files in: {self.watch_dir} (recursive)")
+        logger.info(f"📁 Watching for media files in: {self.watch_dir} (recursive)")
 
     def stop(self) -> None:
         """Stop watching the directory."""

@@ -7,14 +7,98 @@ Uses real-time settings optimized for fast transcoding.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import subprocess
+import threading
 from pathlib import Path
 from typing import Generator
+
+logger = logging.getLogger(__name__)
+
+# Cache directory for transcoded files
+CACHE_DIR = Path.home() / ".cache" / "shots_dashboard"
+
+
+def _get_cache_path(input_path: Path, suffix: str = ".webm") -> Path:
+    """
+    Generate a cache file path for a transcoded file using content-addressing.
+
+    Uses SHA256 hash of the file content to create a unique, deterministic filename.
+    This ensures the same file content always maps to the same cache file,
+    regardless of filename or location.
+
+    Args:
+        input_path: Original input file path
+        suffix: File extension for cached file
+
+    Returns:
+        Path to cache file
+    """
+    # Ensure cache directory exists
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Hash file content for content-addressing
+    sha256_hash = hashlib.sha256()
+    with open(input_path, 'rb') as f:
+        # Read in chunks to handle large files efficiently
+        for chunk in iter(lambda: f.read(8192), b''):
+            sha256_hash.update(chunk)
+
+    content_hash = sha256_hash.hexdigest()[:16]
+
+    # Format: <original_name>.<hash>.<extension>
+    cache_filename = f"{input_path.stem}.{content_hash}{suffix}"
+
+    return CACHE_DIR / cache_filename
+
+
+def _log_stderr(process: subprocess.Popen, prefix: str = "ffmpeg") -> None:
+    """
+    Read and log stderr from a subprocess in a background thread.
+
+    Args:
+        process: Subprocess with stderr to log
+        prefix: Prefix for log messages
+    """
+    def _reader():
+        if process.stderr:
+            for line in iter(process.stderr.readline, b''):
+                if line:
+                    logger.debug(f"{prefix}: {line.decode('utf-8', errors='ignore').rstrip()}")
+
+    thread = threading.Thread(target=_reader, daemon=True)
+    thread.start()
 
 
 class TranscodingError(Exception):
     """Error during video transcoding."""
     pass
+
+
+def is_audio_only(file_path: Path) -> bool:
+    """
+    Check if file contains only audio (no video stream).
+
+    Args:
+        file_path: Path to media file
+
+    Returns:
+        True if file is audio-only
+    """
+    try:
+        if not check_ffmpeg_available():
+            # Guess based on extension
+            audio_exts = {'.wav', '.aif', '.aiff', '.mp3', '.flac', '.ogg', '.m4a', '.aac'}
+            return file_path.suffix.lower() in audio_exts
+
+        info = get_video_codec_info(file_path)
+        # Audio-only if no video codec but has audio
+        return not info.get('video_codec') and bool(info.get('audio_codec'))
+
+    except Exception:
+        # Default to False if detection fails
+        return False
 
 
 def is_web_compatible(file_path: Path) -> bool:
@@ -24,26 +108,31 @@ def is_web_compatible(file_path: Path) -> bool:
     Web browsers natively support:
     - MP4 with H.264/AAC or H.264/MP3
     - WebM with VP8 or VP9/Vorbis or Opus
-    - OGG with Theora/Vorbis
+    - OGG with Theora/Vorbis (video) or Vorbis (audio)
+    - MP3, WAV, OGG, M4A (audio)
 
     This function checks the actual video and audio codecs using ffprobe,
     not just the file extension, to ensure true compatibility.
 
     Args:
-        file_path: Path to video file
+        file_path: Path to video or audio file
 
     Returns:
         True if file is web-compatible
     """
     # Quick check: non-web extensions are definitely not compatible
     ext = file_path.suffix.lower()
-    non_web_formats = {'.mov', '.avi', '.mxf', '.mkv', '.m4v', '.mpg', '.mpeg', '.wmv', '.flv'}
-    if ext in non_web_formats:
+    non_web_video_formats = {'.mov', '.avi', '.mxf', '.mkv', '.m4v', '.mpg', '.mpeg', '.wmv', '.flv'}
+    non_web_audio_formats = {'.aif', '.aiff'}
+
+    if ext in non_web_video_formats or ext in non_web_audio_formats:
         return False
 
-    # For potentially compatible formats, check the actual codecs
-    web_formats = {'.mp4', '.webm', '.ogg', '.ogv'}
-    if ext not in web_formats:
+    # Web-compatible formats
+    web_video_formats = {'.mp4', '.webm', '.ogg', '.ogv'}
+    web_audio_formats = {'.mp3', '.m4a', '.ogg', '.oga', '.wav'}
+
+    if ext not in (web_video_formats | web_audio_formats):
         return False
 
     # Check codecs using ffprobe
@@ -134,12 +223,23 @@ def transcode_to_webm(
     if not check_ffmpeg_available():
         raise TranscodingError("ffmpeg is not available on the system")
 
-    # Default output path
+    # Default output path - use cache directory
     if output_path is None:
-        output_path = input_path.with_suffix('.webm')
+        output_path = _get_cache_path(input_path, suffix='.webm')
+        logger.debug(f"Using cache path: {output_path}")
 
-    # Ensure output directory exists
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Check if cached file exists and is newer than source
+        if output_path.exists():
+            source_mtime = input_path.stat().st_mtime
+            cache_mtime = output_path.stat().st_mtime
+            if cache_mtime >= source_mtime:
+                logger.debug(f"Using existing cached transcode: {output_path.name}")
+                return output_path
+            else:
+                logger.debug(f"Cache outdated, re-transcoding: {output_path.name}")
+    else:
+        # Ensure output directory exists if custom path provided
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # ffmpeg command for fast real-time transcoding
     command = [
@@ -170,20 +270,122 @@ def transcode_to_webm(
     ]
 
     try:
+        logger.debug(f"Starting transcode: {input_path.name} -> {output_path.name}")
+
         result = subprocess.run(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=True
+            check=True,
+            text=True
         )
+
+        # Log stderr output
+        if result.stderr:
+            for line in result.stderr.splitlines():
+                if line.strip():
+                    logger.debug(f"ffmpeg[{input_path.name}]: {line}")
 
         if not output_path.exists():
             raise TranscodingError("Transcoding completed but output file not found")
 
+        logger.debug(f"Transcode complete: {output_path.name}")
         return output_path
 
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr.decode('utf-8', errors='ignore') if e.stderr else "Unknown error"
+        error_msg = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='ignore') if e.stderr else "Unknown error")
+        logger.error(f"ffmpeg transcode failed for {input_path.name}: {error_msg}")
+        raise TranscodingError(f"ffmpeg failed: {error_msg}") from e
+
+
+def transcode_to_ogg(
+    input_path: Path,
+    output_path: Path | None = None,
+    audio_bitrate: str = "128k"
+) -> Path:
+    """
+    Transcode audio to OGG Vorbis format for web playback.
+
+    Args:
+        input_path: Path to input audio file
+        output_path: Path for output file (default: input_path with .ogg extension)
+        audio_bitrate: Audio bitrate
+
+    Returns:
+        Path to transcoded OGG file
+
+    Raises:
+        TranscodingError: If transcoding fails
+    """
+    if not input_path.exists():
+        raise TranscodingError(f"Input file does not exist: {input_path}")
+
+    if not check_ffmpeg_available():
+        raise TranscodingError("ffmpeg is not available on the system")
+
+    # Default output path - use cache directory
+    if output_path is None:
+        output_path = _get_cache_path(input_path, suffix='.ogg')
+        logger.debug(f"Using cache path: {output_path}")
+
+        # Check if cached file exists and is newer than source
+        if output_path.exists():
+            source_mtime = input_path.stat().st_mtime
+            cache_mtime = output_path.stat().st_mtime
+            if cache_mtime >= source_mtime:
+                logger.debug(f"Using existing cached transcode: {output_path.name}")
+                return output_path
+            else:
+                logger.debug(f"Cache outdated, re-transcoding: {output_path.name}")
+    else:
+        # Ensure output directory exists if custom path provided
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # ffmpeg command for audio transcoding
+    command = [
+        'ffmpeg',
+        '-i', str(input_path),
+
+        # Audio encoding settings (Vorbis)
+        '-c:a', 'libvorbis',         # Vorbis codec
+        '-b:a', audio_bitrate,       # Audio bitrate
+        '-ac', '2',                  # Stereo audio
+
+        # Container settings
+        '-f', 'ogg',                 # OGG container
+
+        # Overwrite output file
+        '-y',
+
+        str(output_path)
+    ]
+
+    try:
+        logger.debug(f"Starting audio transcode: {input_path.name} -> {output_path.name}")
+
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+
+        # Log stderr output
+        if result.stderr:
+            for line in result.stderr.splitlines():
+                if line.strip():
+                    logger.debug(f"ffmpeg[{input_path.name}]: {line}")
+
+        if not output_path.exists():
+            raise TranscodingError("Transcoding completed but output file not found")
+
+        logger.debug(f"Audio transcode complete: {output_path.name}")
+        return output_path
+
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='ignore') if e.stderr else "Unknown error")
+        logger.error(f"ffmpeg audio transcode failed for {input_path.name}: {error_msg}")
         raise TranscodingError(f"ffmpeg failed: {error_msg}") from e
 
 
@@ -253,6 +455,11 @@ def stream_transcode_webm(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
+
+        # Start logging stderr in background thread
+        logger.debug(f"Starting transcode stream for: {input_path.name}")
+        _log_stderr(process, prefix=f"ffmpeg[{input_path.name}]")
+
         return process
 
     except Exception as e:
