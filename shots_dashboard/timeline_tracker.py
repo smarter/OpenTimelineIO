@@ -134,6 +134,22 @@ class TimelineTracker:
                 # Note: We don't add a transition here since the file isn't truly changing state,
                 # it's just being filtered out from tracking
 
+        # Re-evaluate existing NEW files to see if they should be NEWER_PROJECT
+        if prproj_media:
+            for file_path, record in list(self.state.files.items()):
+                if record.state == FileState.NEW:
+                    # Check if this file should actually be NEWER_PROJECT
+                    if is_in_newer_project(file_path.name, prproj_media, self.state.timeline_path):
+                        old_state = record.state
+                        record.state = FileState.NEWER_PROJECT
+                        record.last_updated = datetime.now()
+                        self.state.update_file(record)
+                        transitions.append(StateTransition(
+                            path=file_path,
+                            old_state=old_state,
+                            new_state=FileState.NEWER_PROJECT
+                        ))
+
         # Add new files
         for file_path in found_files:
             if file_path not in self.state.files:
