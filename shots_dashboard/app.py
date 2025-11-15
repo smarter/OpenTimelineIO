@@ -121,7 +121,7 @@ def create_app(
     Application factory for creating Flask app with SocketIO.
 
     Args:
-        db_path: Path to database file (for testing)
+        db_path: Path to database file (deprecated, kept for compatibility)
         watch_dir: Optional directory to watch for .otio timeline files
         media_dir: Optional directory to recursively scan and watch for media files
 
@@ -131,10 +131,6 @@ def create_app(
     app = Flask(__name__)
 
     # Configuration
-    if db_path is None:
-        db_path = Path.home() / ".shots_dashboard" / "state.json"
-
-    app.config['DATABASE_PATH'] = db_path
     app.config['WATCH_DIR'] = watch_dir
     app.config['JSON_SORT_KEYS'] = False
     app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
@@ -142,17 +138,13 @@ def create_app(
     # Initialize SocketIO
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-    # Initialize database
-    db = Database(db_path)
+    # Create ephemeral state (no database persistence)
+    # State is reconstructed from .prproj sequence history on each run
+    tracker_state = TrackerState()
 
     def get_tracker() -> TimelineTracker:
         """Get tracker instance with current state."""
-        state = db.load()
-        return TimelineTracker(state)
-
-    def save_tracker(tracker: TimelineTracker) -> None:
-        """Save tracker state to database."""
-        db.save(tracker.state)
+        return TimelineTracker(tracker_state)
 
     def emit_state_update(event_type: str = 'state_update') -> None:
         """
@@ -764,8 +756,6 @@ def create_app(
                 else:
                     transitions = tracker.update_from_timeline(most_recent)
 
-                save_tracker(tracker)
-
                 logger.info(f"   ✓ Loaded {most_recent.name}")
                 logger.info(f"   {len(transitions)} state transitions")
                 logger.debug(f"State transitions: {[(t.path.name, t.old_state, t.new_state) for t in transitions[:5]]}")
@@ -786,7 +776,6 @@ def create_app(
                 logger.info(f"📝 Detected timeline file: {timeline_path.name}")
                 tracker = get_tracker()
                 transitions = tracker.update_from_timeline(timeline_path)
-                save_tracker(tracker)
 
                 # Emit state update
                 emit_state_update('timeline_update_complete')
@@ -806,8 +795,26 @@ def create_app(
         logger.debug(f"Media scan directory: {media_dir}")
         try:
             tracker = get_tracker()
+
+            # Clean up files that are outside the current media_dir
+            media_dir_resolved = media_dir.resolve()
+            files_to_remove = []
+            for file_path in tracker.state.files.keys():
+                try:
+                    # Check if file is within media_dir
+                    file_resolved = file_path.resolve()
+                    if not file_resolved.is_relative_to(media_dir_resolved):
+                        files_to_remove.append(file_path)
+                except (ValueError, OSError):
+                    # File doesn't exist or can't be resolved - remove it
+                    files_to_remove.append(file_path)
+
+            if files_to_remove:
+                logger.info(f"   🧹 Removing {len(files_to_remove)} files outside media directory")
+                for file_path in files_to_remove:
+                    del tracker.state.files[file_path]
+
             transitions = tracker.scan_directory(media_dir, watch_dir=watch_dir)
-            save_tracker(tracker)
 
             logger.info(f"   ✓ Found {len(transitions)} media files")
             logger.debug(f"Media files found: {[t.path.name for t in transitions[:10]]}")
@@ -833,7 +840,6 @@ def create_app(
                     extensions={media_path.suffix.lower()},
                     watch_dir=watch_dir
                 )
-                save_tracker(tracker)
 
                 # Emit state update
                 if transitions:
@@ -868,7 +874,6 @@ def create_app(
                         transitions.extend(media_transitions)
 
                     if transitions:
-                        save_tracker(tracker)
                         emit_state_update('scan_complete')
                         logger.info(f"Periodic scan: {len(transitions)} state changes detected")
                     else:
@@ -970,7 +975,6 @@ def main() -> None:
         app, socketio = create_app(watch_dir=args.watch_dir, media_dir=args.media_dir)
 
     logger.info("Starting Shots Dashboard...")
-    logger.info(f"Database: {app.config['DATABASE_PATH']}")
     logger.info(f"Navigate to http://localhost:{args.port}")
 
     if args.demo:
