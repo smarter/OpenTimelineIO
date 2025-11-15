@@ -159,7 +159,7 @@ class PremiereProjParser:
 
     def _parse_media_reference(self, subclip_elem: ET.Element) -> Optional[otio.schema.ExternalReference]:
         """
-        Extract media file path from SubClip → MasterClip → Media chain.
+        Extract media file path from SubClip → MasterClip → Clip → Source → Media chain.
 
         Args:
             subclip_elem: SubClip XML element
@@ -185,7 +185,7 @@ class PremiereProjParser:
         if clips_elem is None:
             return None
 
-        # Get first clip reference
+        # Get first clip reference (video or audio)
         clip_ref_elem = clips_elem.find('.//Clip[@Index="0"]')
         if clip_ref_elem is None:
             return None
@@ -198,12 +198,32 @@ class PremiereProjParser:
         if clip is None:
             return None
 
-        # Extract file path
-        file_path_elem = clip.find('.//FilePath')
-        if file_path_elem is not None and file_path_elem.text:
-            return otio.schema.ExternalReference(
-                target_url=file_path_elem.text
-            )
+        # The VideoClip/AudioClip has a nested Clip element with Source reference
+        # Navigate: VideoClip/AudioClip → Clip → Source (VideoMediaSource/AudioMediaSource) → Media → FilePath
+        nested_clip = clip.find('.//Clip')
+        if nested_clip is not None:
+            source_ref = nested_clip.find('.//Source')
+            if source_ref is not None:
+                source_id = source_ref.get('ObjectRef')
+                if source_id:
+                    source = self._resolve_ref(source_id)
+                    if source is not None:
+                        # The MediaSource has a Media reference
+                        media_ref = source.find('.//Media')
+                        if media_ref is not None:
+                            media_uid = media_ref.get('ObjectURef')
+                            if media_uid:
+                                media = self._resolve_ref(media_uid)
+                                if media is not None:
+                                    # Try FilePath first, then ActualMediaFilePath as fallback
+                                    file_path_elem = media.find('.//FilePath')
+                                    if file_path_elem is None:
+                                        file_path_elem = media.find('.//ActualMediaFilePath')
+
+                                    if file_path_elem is not None and file_path_elem.text:
+                                        return otio.schema.ExternalReference(
+                                            target_url=file_path_elem.text
+                                        )
 
         return None
 
