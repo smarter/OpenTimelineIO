@@ -828,19 +828,33 @@ def create_app(
                     "error": "Missing 'path' or 'clip_data' in request"
                 }), 400
 
-            source_path = Path(data['path'])
+            filename = data['path']
             clip_data = data['clip_data']
+
+            # Resolve filename to full path using tracker's file list
+            tracker = get_tracker()
+            source_path = None
+
+            # Search for file in tracker's files
+            for file_path, record in tracker.state.files.items():
+                if file_path.name == filename:
+                    source_path = file_path
+                    break
+
+            # If not found in tracker, try as direct path (for testing)
+            if not source_path:
+                source_path = Path(filename)
 
             # Validate source file exists and is within media_dir
             if media_dir:
                 try:
-                    source_path = source_path.resolve()
+                    source_path_resolved = source_path.resolve()
                     media_dir_resolved = media_dir.resolve()
 
-                    if not source_path.is_relative_to(media_dir_resolved):
+                    if not source_path_resolved.is_relative_to(media_dir_resolved):
                         return jsonify({
                             "success": False,
-                            "error": "Access denied: file outside media directory"
+                            "error": f"Access denied: file outside media directory ({source_path})"
                         }), 403
                 except (ValueError, OSError) as e:
                     return jsonify({
