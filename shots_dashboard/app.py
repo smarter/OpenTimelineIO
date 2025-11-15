@@ -111,9 +111,16 @@ def create_app(
                 # For regular files, just show the filename
                 return file_record.path.name
 
+            # Split NEW files into audio and video (like api_files does)
+            new_files = tracker.state.get_files_as_sequences(FileState.NEW)
+            new_audio = [f for f in new_files if f.is_audio()]
+            new_video = [f for f in new_files if f.is_video() or not (f.is_audio() or f.is_video())]
+
             files = {
-                "new": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
-                        for f in tracker.state.get_files_as_sequences(FileState.NEW)],
+                "new_audio": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
+                             for f in new_audio],
+                "new_video": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
+                             for f in new_video],
                 "in_use": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
                           for f in tracker.state.get_files_as_sequences(FileState.IN_USE)],
                 "removed": [{"path": str(f.path), "name": get_display_name(f), "last_updated": f.last_updated.isoformat()}
