@@ -705,6 +705,15 @@ def create_app(
                         "clips": clips_data
                     })
 
+                    # Debug: log what we're sending for BoiteAGant
+                    for clip in clips_data:
+                        if "BoiteAGant-001" in clip.get("name", ""):
+                            logger.info(f"API returning clip: {clip.get('name')}")
+                            logger.info(f"  Fields: {list(clip.keys())}")
+                            logger.info(f"  Has speed: {'speed' in clip}")
+                            if 'speed' in clip:
+                                logger.info(f"  Speed value: {clip['speed']}")
+
             return jsonify({
                 "success": True,
                 "timeline": {
