@@ -774,6 +774,14 @@ class ShotsDashboard {
             requestData.clip_data.source_end = clipData.source_end;
         }
 
+        // IMPORTANT: Add duration and speed for accurate preview generation
+        if (clipData.duration !== undefined) {
+            requestData.clip_data.duration = clipData.duration;
+        }
+        if (clipData.speed !== undefined) {
+            requestData.clip_data.speed = clipData.speed;
+        }
+
         // Encode the request data as a URL parameter for the POST request
         // Since we can't use a simple GET URL, we'll need to fetch and create a blob URL
         // Cache key for client-side caching
