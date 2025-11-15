@@ -196,23 +196,36 @@ class ClipPreviewGenerator:
         # Accurate seeking after input
         cmd.extend(["-ss", str(start)])
 
-        if duration is not None:
-            cmd.extend(["-t", str(duration)])
-
         # Check if source has audio
         has_audio = self._has_audio_stream(source_path)
 
         if needs_speed_change:
-            # Use filter for speed changes
+            # When applying speed changes, don't use -t as it may limit output duration
+            # Instead, use trim filter to extract the exact source duration
+            pass
+        else:
+            # No speed change, so -t directly controls output duration
+            if duration is not None:
+                cmd.extend(["-t", str(duration)])
+
+        if needs_speed_change:
+            # Use filter for speed changes with trim for exact duration
             filter_parts = []
 
-            # Video speed: setpts=PTS/speed
-            filter_parts.append(f"[0:v]setpts=PTS/{speed}[v]")
+            # Video: trim to exact duration, reset timestamps, then apply speed
+            # Note: -ss is already used, so trim duration is from that point
+            if duration is not None:
+                filter_parts.append(f"[0:v]trim=duration={duration},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v]")
+            else:
+                filter_parts.append(f"[0:v]setpts=PTS/{speed}[v]")
 
             if has_audio:
-                # Audio speed: atempo (limited to 0.5-2.0, chain if needed)
-                audio_filter = self._build_atempo_filter(speed, "[0:a]", "[a]")
-                filter_parts.append(audio_filter)
+                # Audio: trim to exact duration, reset timestamps, then apply speed
+                atempo_chain = self._build_atempo_chain(speed)
+                if duration is not None:
+                    filter_parts.append(f"[0:a]atrim=duration={duration},asetpts=PTS-STARTPTS,{atempo_chain}[a]")
+                else:
+                    filter_parts.append(f"[0:a]{atempo_chain}[a]")
 
             cmd.extend(["-filter_complex", ";".join(filter_parts)])
             cmd.extend(["-map", "[v]"])
