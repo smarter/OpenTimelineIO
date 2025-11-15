@@ -34,6 +34,38 @@ class TimelineTracker:
         self._prproj_cache: dict[Path, Set[str]] | None = None
         self._prproj_cache_dir: Path | None = None
 
+    def _should_ignore_source_images(self, file_path: Path) -> bool:
+        """
+        Check if this file is a source image for a video that's already in the timeline.
+
+        If foo.mov is in the timeline, ignore foo/*.png and foo/*.jpg files.
+
+        Args:
+            file_path: Path to check
+
+        Returns:
+            True if this file should be ignored as a source image
+        """
+        # Only check image files
+        if file_path.suffix.lower() not in {'.png', '.jpg', '.jpeg'}:
+            return False
+
+        # Get video stems from files currently in use
+        video_extensions = {'.mov', '.mp4', '.mxf', '.avi', '.mkv', '.m4v', '.webm'}
+        video_stems = set()
+
+        for record in self.state.in_use_files:
+            if record.path.suffix.lower() in video_extensions:
+                video_stems.add(record.path.stem)
+
+        # Check if this image is in a directory matching a video stem
+        # e.g., foo.mov → foo/*.png
+        parent = file_path.parent
+        if parent.name in video_stems:
+            return True
+
+        return False
+
     def scan_directory(
         self,
         directory: Path,
@@ -74,7 +106,17 @@ class TimelineTracker:
             found_files.update(directory.rglob(f"*{ext}"))
             found_files.update(directory.rglob(f"*{ext.upper()}"))
 
+        # Filter out source images for videos already in timeline
+        found_files = {f for f in found_files if not self._should_ignore_source_images(f)}
+
         transitions: list[StateTransition] = []
+
+        # Remove previously tracked files that should now be ignored
+        for file_path in list(self.state.files.keys()):
+            if self._should_ignore_source_images(file_path):
+                del self.state.files[file_path]
+                # Note: We don't add a transition here since the file isn't truly changing state,
+                # it's just being filtered out from tracking
 
         # Add new files
         for file_path in found_files:
