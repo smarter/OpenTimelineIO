@@ -535,6 +535,10 @@ class ShotsDashboard {
         this.audioSource = document.getElementById('audio-preview-source');
         this.imagePlayer = document.getElementById('image-preview-player');
         this.previewFilename = document.getElementById('video-preview-filename');
+
+        // Log for debugging
+        if (!this.previewPopup) console.error('Preview popup element not found');
+        if (!this.imagePlayer) console.error('Image player element not found');
     }
 
     isAudioFile(filename) {
@@ -550,6 +554,8 @@ class ShotsDashboard {
     }
 
     showVideoPreview(filename, element) {
+        console.log('showVideoPreview called for:', filename);
+
         // Cancel any pending preview
         if (this.previewTimeout) {
             clearTimeout(this.previewTimeout);
@@ -557,6 +563,7 @@ class ShotsDashboard {
 
         // Delay showing preview to avoid flickering on quick mouse movements
         this.previewTimeout = setTimeout(() => {
+            console.log('Showing preview for:', filename);
             this.currentPreviewFilename = filename;
 
             // Show loading state
