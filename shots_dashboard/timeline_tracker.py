@@ -43,7 +43,8 @@ class TimelineTracker:
             List of state transitions that occurred
         """
         if extensions is None:
-            extensions = {'.mov', '.mp4', '.mxf', '.avi', '.mkv', '.m4v', '.wav', '.aif', '.aiff'}
+            extensions = {'.mov', '.mp4', '.mxf', '.avi', '.mkv', '.m4v', '.wav', '.aif', '.aiff',
+                         '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
 
         if not directory.exists():
             raise ValueError(f"Directory does not exist: {directory}")

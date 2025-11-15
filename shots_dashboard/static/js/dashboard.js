@@ -5,8 +5,10 @@ class ShotsDashboard {
         this.socket = null;
         this.previewTimeout = null;
         this.currentPreviewFilename = null;
+        this.autoplayEnabled = localStorage.getItem('audioAutoplayEnabled') === 'true';
         this.setupEventListeners();
         this.setupVideoPreview();
+        this.setupAutoplayPermission();
         this.setupWebSocket();
         // Initial load will come from WebSocket connection
     }
@@ -541,6 +543,56 @@ class ShotsDashboard {
         if (!this.imagePlayer) console.error('Image player element not found');
     }
 
+    setupAutoplayPermission() {
+        const overlay = document.getElementById('autoplay-overlay');
+        const enableBtn = document.getElementById('enable-autoplay-btn');
+        const skipBtn = document.getElementById('skip-autoplay-btn');
+
+        // Show overlay if permission not granted yet
+        if (!this.autoplayEnabled) {
+            overlay.style.display = 'flex';
+        }
+
+        // Enable autoplay button
+        enableBtn.addEventListener('click', async () => {
+            try {
+                // Create a silent audio context to get permission
+                // This is the most reliable cross-browser method
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                // Connect and configure for silent playback
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                gainNode.gain.value = 0.001; // Nearly silent
+
+                // Play briefly
+                oscillator.start(0);
+                oscillator.stop(audioContext.currentTime + 0.01);
+
+                // Store permission
+                this.autoplayEnabled = true;
+                localStorage.setItem('audioAutoplayEnabled', 'true');
+
+                // Hide overlay
+                overlay.style.display = 'none';
+                console.log('Audio autoplay enabled');
+            } catch (error) {
+                console.warn('Failed to enable autoplay:', error);
+                // Even if it fails, grant permission since user clicked
+                this.autoplayEnabled = true;
+                localStorage.setItem('audioAutoplayEnabled', 'true');
+                overlay.style.display = 'none';
+            }
+        });
+
+        // Skip button
+        skipBtn.addEventListener('click', () => {
+            overlay.style.display = 'none';
+        });
+    }
+
     isAudioFile(filename) {
         const ext = filename.toLowerCase().split('.').pop();
         const audioExtensions = ['wav', 'mp3', 'ogg', 'oga', 'm4a', 'aiff', 'aif', 'flac', 'aac'];
@@ -649,10 +701,22 @@ class ShotsDashboard {
                 this.audioSource.src = `/api/preview/${encodeURIComponent(filename)}`;
                 this.audioPlayer.load();
 
-                // Just show controls when loaded (no autoplay for audio)
+                // Autoplay audio (unmuted if permission granted)
                 this.audioPlayer.onloadeddata = () => {
                     this.previewPopup.classList.remove('loading');
-                    // Don't autoplay - browsers block unmuted audio autoplay
+
+                    // If autoplay is enabled, unmute before playing
+                    if (this.autoplayEnabled) {
+                        this.audioPlayer.muted = false;
+                    }
+
+                    // Start playback
+                    this.audioPlayer.play().then(() => {
+                        console.log('Audio preview playing, muted:', this.audioPlayer.muted);
+                    }).catch(err => {
+                        console.warn('Audio autoplay prevented:', err);
+                        // Fall back to showing controls
+                    });
                 };
 
                 this.audioPlayer.onerror = (e) => {
@@ -700,6 +764,9 @@ class ShotsDashboard {
         // Pause and clear audio/video players
         this.videoPlayer.pause();
         this.audioPlayer.pause();
+
+        // Reset muted state to default
+        this.audioPlayer.muted = true;
 
         // Clear sources to stop any loading/downloading
         this.videoSource.src = '';

@@ -131,13 +131,23 @@
                 <source id="video-preview-source">
                 Your browser does not support video playback.
             </video>
-            <audio id="audio-preview-player" class="audio-preview-player" controls loop preload="none" style="display: none;">
+            <audio id="audio-preview-player" class="audio-preview-player" muted controls loop preload="none" style="display: none;">
                 <source id="audio-preview-source">
                 Your browser does not support audio playback.
             </audio>
             <img id="image-preview-player" class="image-preview-player" style="display: none;" alt="Preview">
             <div class="video-preview-loading">Loading...</div>
             <div class="video-preview-filename" id="video-preview-filename"></div>
+        </div>
+
+        <!-- Autoplay Permission Overlay -->
+        <div id="autoplay-overlay" class="autoplay-overlay" style="display: none;">
+            <div class="autoplay-modal">
+                <h2>🔊 Enable Audio Previews</h2>
+                <p>Click below to enable automatic audio playback for file previews</p>
+                <button id="enable-autoplay-btn" class="btn btn-primary">Enable Audio Autoplay</button>
+                <button id="skip-autoplay-btn" class="btn btn-secondary">Skip</button>
+            </div>
         </div>
     </div>
 
