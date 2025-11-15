@@ -686,16 +686,18 @@ class ShotsDashboard {
 
         this.previewPopup.style.display = 'none';
 
-        // Pause and clear all players
+        // Pause and clear audio/video players
         this.videoPlayer.pause();
         this.audioPlayer.pause();
 
         // Clear sources to stop any loading/downloading
         this.videoSource.src = '';
         this.audioSource.src = '';
-        this.imagePlayer.src = '';
         this.videoPlayer.load();
         this.audioPlayer.load();
+
+        // Clear image using data URI to avoid "Invalid URI" error
+        this.imagePlayer.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
         // Hide all players
         this.videoPlayer.style.display = 'none';
