@@ -797,6 +797,126 @@ def create_app(
                 "error": str(e)
             }), 500
 
+    @app.route('/api/preview/clip', methods=['POST'])
+    def api_clip_preview() -> Response | tuple[Any, int]:
+        """
+        Generate clip-accurate preview for a timeline clip.
+
+        Expects JSON body with:
+        {
+            "path": "/path/to/source/file.mov",
+            "clip_data": {
+                "source_start": 5.0,
+                "source_end": 10.0,
+                OR
+                "segments": [
+                    {"source_start": 0.0, "source_end": 2.0},
+                    {"source_start": 4.0, "source_end": 6.0}
+                ]
+            }
+        }
+
+        Returns the generated preview file with appropriate mime type.
+        """
+        try:
+            from clip_preview import ClipPreviewGenerator, PreviewGenerationError
+
+            data = request.get_json()
+            if not data or 'path' not in data or 'clip_data' not in data:
+                return jsonify({
+                    "success": False,
+                    "error": "Missing 'path' or 'clip_data' in request"
+                }), 400
+
+            source_path = Path(data['path'])
+            clip_data = data['clip_data']
+
+            # Validate source file exists and is within media_dir
+            if media_dir:
+                try:
+                    source_path = source_path.resolve()
+                    media_dir_resolved = media_dir.resolve()
+
+                    if not source_path.is_relative_to(media_dir_resolved):
+                        return jsonify({
+                            "success": False,
+                            "error": "Access denied: file outside media directory"
+                        }), 403
+                except (ValueError, OSError) as e:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Invalid path: {str(e)}"
+                    }), 400
+
+            if not source_path.exists():
+                return jsonify({
+                    "success": False,
+                    "error": f"Source file not found: {source_path}"
+                }), 404
+
+            # Generate preview
+            logger.info(f"Generating clip preview for {source_path.name}")
+            generator = ClipPreviewGenerator()
+
+            try:
+                preview_path = generator.generate_preview(
+                    clip_data,
+                    source_path,
+                    timeout=300
+                )
+            except PreviewGenerationError as e:
+                logger.error(f"Preview generation failed: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Preview generation failed: {str(e)}"
+                }), 500
+            except TimeoutError:
+                logger.error("Preview generation timed out")
+                return jsonify({
+                    "success": False,
+                    "error": "Preview generation timed out (exceeded 5 minutes)"
+                }), 504
+
+            # Stream the preview file
+            def generate():
+                with open(preview_path, 'rb') as f:
+                    while chunk := f.read(8192):
+                        yield chunk
+
+            # Determine mime type
+            ext = preview_path.suffix.lower()
+            if ext == '.mp4':
+                mimetype = 'video/mp4'
+            elif ext == '.webm':
+                mimetype = 'video/webm'
+            elif ext in {'.m4a', '.aac'}:
+                mimetype = 'audio/mp4'
+            elif ext == '.ogg':
+                mimetype = 'audio/ogg'
+            elif ext == '.mp3':
+                mimetype = 'audio/mpeg'
+            elif ext == '.wav':
+                mimetype = 'audio/wav'
+            else:
+                mimetype = 'application/octet-stream'
+
+            return Response(
+                stream_with_context(generate()),
+                mimetype=mimetype,
+                headers={
+                    'Accept-Ranges': 'bytes',
+                    'Content-Type': mimetype,
+                    'Content-Disposition': 'inline'
+                }
+            )
+
+        except Exception as e:
+            logger.exception("Clip preview API error")
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
     @app.errorhandler(404)
     def not_found(e: Any) -> tuple[Any, int]:
         """Handle 404 errors."""
