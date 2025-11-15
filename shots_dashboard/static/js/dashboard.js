@@ -334,8 +334,8 @@ class ShotsDashboard {
 
                 clipEl.appendChild(clipContent);
 
-                // Attach preview handlers
-                this.attachPreviewHandlers(clipEl, clip.name);
+                // Attach preview handlers with full clip data
+                this.attachPreviewHandlers(clipEl, clip);
 
                 trackClips.appendChild(clipEl);
             });
@@ -507,8 +507,8 @@ class ShotsDashboard {
         return imageExtensions.includes(ext);
     }
 
-    showVideoPreview(filename, element) {
-        console.log('showVideoPreview called for:', filename);
+    showVideoPreview(filename, element, clipData = null) {
+        console.log('showVideoPreview called for:', filename, 'with clip data:', clipData);
 
         // Cancel any pending preview
         if (this.previewTimeout) {
@@ -578,7 +578,10 @@ class ShotsDashboard {
                 this.imagePlayer.onerror = null;
 
                 // Load image
-                this.imagePlayer.src = `/api/preview/${encodeURIComponent(filename)}`;
+                const imageUrl = clipData
+                    ? this.buildClipPreviewUrl(filename, clipData)
+                    : `/api/preview/${encodeURIComponent(filename)}`;
+                this.imagePlayer.src = imageUrl;
 
                 this.imagePlayer.onload = () => {
                     this.previewPopup.classList.remove('loading');
@@ -600,7 +603,10 @@ class ShotsDashboard {
 
                 // Load audio
                 this.audioSource.type = mimeType;
-                this.audioSource.src = `/api/preview/${encodeURIComponent(filename)}`;
+                const audioUrl = clipData
+                    ? this.buildClipPreviewUrl(filename, clipData)
+                    : `/api/preview/${encodeURIComponent(filename)}`;
+                this.audioSource.src = audioUrl;
                 this.audioPlayer.load();
 
                 // Autoplay audio (unmuted if permission granted)
@@ -636,7 +642,10 @@ class ShotsDashboard {
 
                 // Load video
                 this.videoSource.type = mimeType;
-                this.videoSource.src = `/api/preview/${encodeURIComponent(filename)}`;
+                const videoUrl = clipData
+                    ? this.buildClipPreviewUrl(filename, clipData)
+                    : `/api/preview/${encodeURIComponent(filename)}`;
+                this.videoSource.src = videoUrl;
                 this.videoPlayer.load();
 
                 // Start playing when loaded
@@ -696,10 +705,14 @@ class ShotsDashboard {
         this.previewPopup.classList.remove('loading');
     }
 
-    attachPreviewHandlers(element, filename) {
+    attachPreviewHandlers(element, clip) {
+        // Extract filename and clip data
+        const filename = typeof clip === 'string' ? clip : clip.name;
+        const clipData = typeof clip === 'object' ? clip : null;
+
         // Hover to show preview popup
         element.addEventListener('mouseenter', (e) => {
-            this.showVideoPreview(filename, element);
+            this.showVideoPreview(filename, element, clipData);
         });
 
         element.addEventListener('mouseleave', () => {
@@ -709,12 +722,156 @@ class ShotsDashboard {
         // Click to open preview in new tab
         element.addEventListener('click', (e) => {
             e.preventDefault();
-            const previewUrl = `/api/preview/${encodeURIComponent(filename)}`;
-            window.open(previewUrl, '_blank');
+            // Use simple preview for non-timeline clips, clip preview for timeline clips
+            const previewUrl = clipData
+                ? this.getClipPreviewUrl(filename, clipData)
+                : `/api/preview/${encodeURIComponent(filename)}`;
+
+            if (clipData) {
+                // For clip previews, need to POST the data
+                this.openClipPreview(filename, clipData);
+            } else {
+                window.open(previewUrl, '_blank');
+            }
         });
 
         // Make it look clickable
         element.style.cursor = 'pointer';
+    }
+
+    async openClipPreview(filename, clipData) {
+        // Generate clip preview and open in new tab
+        try {
+            const previewUrl = await this.generateClipPreview(filename, clipData);
+            if (previewUrl) {
+                window.open(previewUrl, '_blank');
+            }
+        } catch (error) {
+            console.error('Failed to open clip preview:', error);
+            alert('Failed to generate clip preview');
+        }
+    }
+
+    getClipPreviewUrl(filename, clipData) {
+        // This is a placeholder - actual preview needs to be generated via POST
+        return `/api/preview/clip`;
+    }
+
+    buildClipPreviewUrl(filename, clipData) {
+        // Build clip data for API
+        const requestData = {
+            path: filename,
+            clip_data: {}
+        };
+
+        // Add source range or segments
+        if (clipData.segments) {
+            // Merged clip with segments
+            requestData.clip_data.segments = clipData.segments;
+        } else if (clipData.source_start !== undefined && clipData.source_end !== undefined) {
+            // Simple clip with source range
+            requestData.clip_data.source_start = clipData.source_start;
+            requestData.clip_data.source_end = clipData.source_end;
+        }
+
+        // Encode the request data as a URL parameter for the POST request
+        // Since we can't use a simple GET URL, we'll need to fetch and create a blob URL
+        // Cache key for client-side caching
+        const cacheKey = JSON.stringify(requestData);
+
+        // Check cache
+        if (this.clipPreviewCache && this.clipPreviewCache.has(cacheKey)) {
+            console.log('Using cached clip preview for:', filename);
+            return this.clipPreviewCache.get(cacheKey);
+        }
+
+        // Generate preview asynchronously and return a placeholder
+        // The actual preview will be loaded when the fetch completes
+        this.generateAndCacheClipPreview(filename, requestData, cacheKey);
+
+        // Return regular preview as fallback while clip preview is generating
+        return `/api/preview/${encodeURIComponent(filename)}`;
+    }
+
+    async generateAndCacheClipPreview(filename, requestData, cacheKey) {
+        try {
+            console.log('Generating clip preview for:', filename);
+
+            const response = await fetch('/api/preview/clip', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+
+            // Initialize cache if needed
+            if (!this.clipPreviewCache) {
+                this.clipPreviewCache = new Map();
+            }
+
+            // Cache the object URL
+            this.clipPreviewCache.set(cacheKey, objectUrl);
+
+            console.log('Clip preview cached for:', filename);
+
+            // Update the current preview if it's still showing this file
+            if (this.currentPreviewFilename === filename) {
+                // Reload with the accurate preview
+                const isAudio = this.isAudioFile(filename);
+                const isImage = this.isImageFile(filename);
+
+                if (isImage) {
+                    this.imagePlayer.src = objectUrl;
+                } else if (isAudio) {
+                    this.audioSource.src = objectUrl;
+                    this.audioPlayer.load();
+                } else {
+                    this.videoSource.src = objectUrl;
+                    this.videoPlayer.load();
+                }
+            }
+        } catch (error) {
+            console.error('Failed to generate clip preview:', error);
+        }
+    }
+
+    async generateClipPreview(filename, clipData) {
+        // Build clip data for API
+        const requestData = {
+            path: filename,
+            clip_data: {}
+        };
+
+        // Add source range or segments
+        if (clipData.segments) {
+            requestData.clip_data.segments = clipData.segments;
+        } else if (clipData.source_start !== undefined && clipData.source_end !== undefined) {
+            requestData.clip_data.source_start = clipData.source_start;
+            requestData.clip_data.source_end = clipData.source_end;
+        }
+
+        const response = await fetch('/api/preview/clip', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
     }
 }
 

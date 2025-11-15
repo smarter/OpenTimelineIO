@@ -601,10 +601,10 @@ def create_app(
                         # Add as new clip
                         merged_clips.append(clip.copy())
 
-                # Clean up temporary fields but keep segments
+                # Clean up temporary fields but keep source ranges and segments
+                # Keep source_start/source_end for non-merged clips (needed for preview)
+                # Keep segments for merged clips (they already have source ranges)
                 for clip in merged_clips:
-                    clip.pop("source_start", None)
-                    clip.pop("source_end", None)
                     clip.pop("segments_end", None)
 
                 clips_data = merged_clips
