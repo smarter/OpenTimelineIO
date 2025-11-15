@@ -36,9 +36,9 @@ class TimelineTracker:
 
     def _should_ignore_source_images(self, file_path: Path) -> bool:
         """
-        Check if this file is a source image for a video that's already in the timeline.
+        Check if this file is a source image for a video that exists.
 
-        If foo.mov is in the timeline, ignore foo/*.png and foo/*.jpg files.
+        If foo.mov exists (in any state), ignore foo/*.png and foo/*.jpg files.
 
         Args:
             file_path: Path to check
@@ -50,11 +50,11 @@ class TimelineTracker:
         if file_path.suffix.lower() not in {'.png', '.jpg', '.jpeg'}:
             return False
 
-        # Get video stems from files currently in use
+        # Get video stems from ALL tracked files (not just in_use)
         video_extensions = {'.mov', '.mp4', '.mxf', '.avi', '.mkv', '.m4v', '.webm'}
         video_stems = set()
 
-        for record in self.state.in_use_files:
+        for record in self.state.files.values():
             if record.path.suffix.lower() in video_extensions:
                 video_stems.add(record.path.stem)
 
@@ -106,14 +106,30 @@ class TimelineTracker:
             found_files.update(directory.rglob(f"*{ext}"))
             found_files.update(directory.rglob(f"*{ext.upper()}"))
 
-        # Filter out source images for videos already in timeline
-        found_files = {f for f in found_files if not self._should_ignore_source_images(f)}
+        # Build set of video stems from newly found files
+        video_extensions = {'.mov', '.mp4', '.mxf', '.avi', '.mkv', '.m4v', '.webm'}
+        newly_found_video_stems = {
+            f.stem for f in found_files
+            if f.suffix.lower() in video_extensions
+        }
+
+        # Filter out source images based on newly found videos
+        def should_filter_image(file_path: Path) -> bool:
+            if file_path.suffix.lower() not in {'.png', '.jpg', '.jpeg'}:
+                return False
+            # Check against newly found videos
+            if file_path.parent.name in newly_found_video_stems:
+                return True
+            # Also check against existing tracked videos
+            return self._should_ignore_source_images(file_path)
+
+        found_files = {f for f in found_files if not should_filter_image(f)}
 
         transitions: list[StateTransition] = []
 
         # Remove previously tracked files that should now be ignored
         for file_path in list(self.state.files.keys()):
-            if self._should_ignore_source_images(file_path):
+            if should_filter_image(file_path):
                 del self.state.files[file_path]
                 # Note: We don't add a transition here since the file isn't truly changing state,
                 # it's just being filtered out from tracking

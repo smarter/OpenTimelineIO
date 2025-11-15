@@ -29,8 +29,8 @@ def create_test_timeline(path: Path, clip_names: list[str]) -> None:
     otio.adapters.write_to_file(timeline, str(path))
 
 
-def test_ignores_source_images_when_video_in_timeline():
-    """Test that source images are ignored when corresponding video is in timeline."""
+def test_ignores_source_images_when_video_exists():
+    """Test that source images are ignored when corresponding video exists."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
@@ -47,74 +47,58 @@ def test_ignores_source_images_when_video_in_timeline():
         (source_dir / "frame_001.png").touch()
         (source_dir / "frame_002.png").touch()
 
-        # Create timeline with the video
-        timeline_path = tmpdir / "timeline.otio"
-        create_test_timeline(timeline_path, ["shot001.mov"])
-
         # Create tracker and scan
         state = TrackerState()
         tracker = TimelineTracker(state)
 
-        # First scan to discover files
-        tracker.scan_directory(tmpdir)
-
-        # Update from timeline to mark video as IN_USE
-        tracker.update_from_timeline(timeline_path)
-
-        # Scan again - source images should now be ignored
+        # Scan - video exists, so source images should be ignored
         tracker.scan_directory(tmpdir)
 
         # Check that only the video is tracked, not the images
         all_files = list(tracker.state.files.keys())
-        assert len(all_files) == 1  # only video file (timeline files aren't tracked)
+        assert len(all_files) == 1  # only video file
 
-        # Video should be IN_USE
+        # Video should be tracked (as NEW since no timeline)
         video_record = tracker.state.get_file(video_file)
         assert video_record is not None
-        assert video_record.state == FileState.IN_USE
+        assert video_record.state == FileState.NEW
 
         # Images should not be tracked
         for img in source_dir.glob("*.png"):
             assert tracker.state.get_file(img) is None
 
 
-def test_tracks_images_when_video_not_in_timeline():
-    """Test that source images ARE tracked when video is not in timeline."""
+def test_tracks_images_when_video_doesnt_exist():
+    """Test that source images ARE tracked when video doesn't exist yet."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
-        # Create directory structure
-        video_file = tmpdir / "shot001.mov"
-        video_file.touch()
-
+        # Create only source images, no video yet
         source_dir = tmpdir / "shot001"
         source_dir.mkdir()
         (source_dir / "frame_001.png").touch()
         (source_dir / "frame_002.png").touch()
 
-        # Create tracker and scan (no timeline)
+        # Create tracker and scan (no video file)
         state = TrackerState()
         tracker = TimelineTracker(state)
         tracker.scan_directory(tmpdir)
 
-        # All files should be tracked (video not in timeline yet)
+        # Images should be tracked since video doesn't exist
         all_files = list(tracker.state.files.keys())
-        assert len(all_files) == 3  # video + 2 images
+        assert len(all_files) == 2  # 2 images
 
         # All should be NEW
         for record in tracker.state.files.values():
             assert record.state == FileState.NEW
 
 
-def test_removes_tracked_images_when_video_added_to_timeline():
-    """Test that previously tracked images are removed when video enters timeline."""
+def test_removes_tracked_images_when_video_created():
+    """Test that previously tracked images are removed when video is created."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
-        # Create directory structure
-        video_file = tmpdir / "shot001.mov"
-        video_file.touch()
-
+        # Create directory structure with only images first
         source_dir = tmpdir / "shot001"
         source_dir.mkdir()
         img1 = source_dir / "frame_001.png"
@@ -122,23 +106,22 @@ def test_removes_tracked_images_when_video_added_to_timeline():
         img1.touch()
         img2.touch()
 
-        # Create tracker and scan (no timeline)
+        # Create tracker and scan
         state = TrackerState()
         tracker = TimelineTracker(state)
         tracker.scan_directory(tmpdir)
 
-        # Initially all files tracked
-        assert len(tracker.state.files) == 3
+        # Initially only images tracked
+        assert len(tracker.state.files) == 2
 
-        # Create timeline with the video
-        timeline_path = tmpdir / "timeline.otio"
-        create_test_timeline(timeline_path, ["shot001.mov"])
-        tracker.update_from_timeline(timeline_path)
+        # Now create the video file (simulating render completion)
+        video_file = tmpdir / "shot001.mov"
+        video_file.touch()
 
         # Scan again - images should be removed
         tracker.scan_directory(tmpdir)
 
-        # Only video should be tracked (timeline files aren't tracked)
+        # Only video should be tracked
         assert len(tracker.state.files) == 1
         assert tracker.state.get_file(video_file) is not None
         assert tracker.state.get_file(img1) is None
@@ -169,25 +152,16 @@ def test_only_ignores_png_jpg_in_matching_directory():
         root_img = tmpdir / "root.png"
         root_img.touch()
 
-        # Create timeline with the video
-        timeline_path = tmpdir / "timeline.otio"
-        create_test_timeline(timeline_path, ["shot001.mov"])
-
-        # Create tracker, scan first, then update from timeline
+        # Create tracker and scan
         state = TrackerState()
         tracker = TimelineTracker(state)
         tracker.scan_directory(tmpdir)
-        tracker.update_from_timeline(timeline_path)
 
-        # Scan again after timeline update - now images should be filtered
-        tracker.scan_directory(tmpdir)
-
-        # Video should be tracked and IN_USE
+        # Video should be tracked
         video_record = tracker.state.get_file(video_file)
         assert video_record is not None
-        assert video_record.state == FileState.IN_USE
 
-        # Images in shot001/ should NOT be tracked
+        # Images in shot001/ should NOT be tracked (filtered out)
         for img in source_dir.glob("*.png"):
             assert tracker.state.get_file(img) is None
 
