@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from prproj_parser import extract_media_filenames, scan_prproj_files, was_in_older_project
+from prproj_parser import extract_media_filenames, scan_prproj_files, was_in_older_project, is_in_newer_project
 
 
 def create_test_prproj(path: Path, media_files: list[str]) -> None:
@@ -99,6 +99,47 @@ def test_was_in_older_project():
 
         # File not in any project should not be marked as removed
         assert not was_in_older_project("new_clip.mov", prproj_media, timeline)
+
+
+def test_is_in_newer_project():
+    """Test checking if a file is in a newer project."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+
+        # Create timeline file
+        timeline = tmpdir / "timeline.otio"
+        timeline.touch()
+
+        # Make sure timeline is older
+        import time
+        time.sleep(0.01)
+
+        # Create newer project file
+        new_proj = tmpdir / "new.prproj"
+        create_test_prproj(new_proj, ["new_clip.mov"])
+
+        prproj_media = {new_proj: {"new_clip.mov"}}
+
+        # File in newer project should be detected
+        assert is_in_newer_project("new_clip.mov", prproj_media, timeline)
+
+        # File not in any project should not be detected
+        assert not is_in_newer_project("other_clip.mov", prproj_media, timeline)
+
+
+def test_is_in_newer_project_no_timeline():
+    """Test that files in prproj are detected as newer when no timeline exists."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+
+        # Create project file
+        proj = tmpdir / "project.prproj"
+        create_test_prproj(proj, ["clip.mov"])
+
+        prproj_media = {proj: {"clip.mov"}}
+
+        # With no timeline, any file in prproj should be considered "newer"
+        assert is_in_newer_project("clip.mov", prproj_media, None)
 
 
 def test_extract_from_invalid_file():

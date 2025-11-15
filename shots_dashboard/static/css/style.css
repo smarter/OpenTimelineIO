@@ -151,6 +151,10 @@ input[type="text"]:focus {
     border-left-color: var(--success);
 }
 
+.stat-card.stat-newer-project {
+    border-left-color: var(--accent-secondary);
+}
+
 .stat-card.stat-removed {
     border-left-color: var(--danger);
 }
@@ -213,6 +217,10 @@ input[type="text"]:focus {
 
 .header-in-use {
     background: rgba(46, 204, 113, 0.1);
+}
+
+.header-newer-project {
+    background: rgba(83, 52, 131, 0.1);
 }
 
 .header-removed {
@@ -322,6 +330,10 @@ input[type="text"]:focus {
 
 .state-IN_USE {
     background: var(--success);
+}
+
+.state-NEWER_PROJECT {
+    background: var(--accent-secondary);
 }
 
 .state-REMOVED {

@@ -106,6 +106,8 @@ def create_app(
                           for f in tracker.state.in_use_files],
                 "removed": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
                            for f in tracker.state.removed_files],
+                "newer_project": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
+                                 for f in tracker.state.newer_project_files],
             }
 
             # Get timeline history
@@ -246,7 +248,8 @@ def create_app(
                 "files": {
                     "new": [serialize_file(f) for f in state.new_files],
                     "in_use": [serialize_file(f) for f in state.in_use_files],
-                    "removed": [serialize_file(f) for f in state.removed_files]
+                    "removed": [serialize_file(f) for f in state.removed_files],
+                    "newer_project": [serialize_file(f) for f in state.newer_project_files]
                 }
             }), 200
 

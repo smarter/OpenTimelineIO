@@ -121,3 +121,42 @@ def was_in_older_project(
                 return True
 
     return False
+
+
+def is_in_newer_project(
+    filename: str,
+    prproj_media: dict[Path, Set[str]],
+    timeline_path: Path | None
+) -> bool:
+    """
+    Check if a filename is used in a Premiere Pro project newer than the current timeline.
+
+    Args:
+        filename: The filename to check
+        prproj_media: Dictionary mapping prproj paths to media filenames
+        timeline_path: Current timeline path (for date comparison)
+
+    Returns:
+        True if the file appears in a .prproj newer than the timeline
+    """
+    if not timeline_path or not timeline_path.exists():
+        # If no timeline exists, check if file is in any prproj
+        for media_files in prproj_media.values():
+            if filename in media_files:
+                logger.debug(f"{filename} found in project (no timeline to compare)")
+                return True
+        return False
+
+    timeline_mtime = timeline_path.stat().st_mtime
+
+    for prproj_path, media_files in prproj_media.items():
+        if filename in media_files:
+            prproj_mtime = prproj_path.stat().st_mtime
+            if prproj_mtime > timeline_mtime:
+                logger.debug(
+                    f"{filename} found in newer project {prproj_path.name} "
+                    f"(project: {prproj_mtime}, timeline: {timeline_mtime})"
+                )
+                return True
+
+    return False

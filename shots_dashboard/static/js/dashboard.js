@@ -160,12 +160,14 @@ class ShotsDashboard {
         document.getElementById('stat-total').textContent = stats.total;
         document.getElementById('stat-new').textContent = stats.new;
         document.getElementById('stat-in-use').textContent = stats.in_use;
+        document.getElementById('stat-newer-project').textContent = stats.newer_project || 0;
         document.getElementById('stat-removed').textContent = stats.removed;
     }
 
     updateFiles(files) {
         this.renderFileList('files-new', files.new, 'count-new');
         this.renderFileList('files-in-use', files.in_use, 'count-in-use');
+        this.renderFileList('files-newer-project', files.newer_project || [], 'count-newer-project');
         this.renderFileList('files-removed', files.removed, 'count-removed');
     }
 

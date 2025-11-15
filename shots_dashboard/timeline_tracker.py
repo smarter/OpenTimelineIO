@@ -15,10 +15,10 @@ import opentimelineio as otio
 
 try:
     from .models import FileRecord, FileState, StateTransition, TrackerState, TimelineSnapshot
-    from .prproj_parser import scan_prproj_files, was_in_older_project
+    from .prproj_parser import scan_prproj_files, was_in_older_project, is_in_newer_project
 except ImportError:
     from models import FileRecord, FileState, StateTransition, TrackerState, TimelineSnapshot
-    from prproj_parser import scan_prproj_files, was_in_older_project
+    from prproj_parser import scan_prproj_files, was_in_older_project, is_in_newer_project
 
 
 class TimelineTracker:
@@ -82,8 +82,15 @@ class TimelineTracker:
                 # Determine initial state based on .prproj history
                 initial_state = FileState.NEW
 
+                # Check if this file is in a newer Premiere Pro project (highest priority)
+                if prproj_media and is_in_newer_project(
+                    file_path.name,
+                    prproj_media,
+                    self.state.timeline_path
+                ):
+                    initial_state = FileState.NEWER_PROJECT
                 # Check if this file was in an older Premiere Pro project
-                if prproj_media and was_in_older_project(
+                elif prproj_media and was_in_older_project(
                     file_path.name,
                     prproj_media,
                     self.state.timeline_path
@@ -158,6 +165,8 @@ class TimelineTracker:
         - REMOVED → IN_USE: Previously removed file is back in timeline
         - NEW → NEW: File still not in timeline (no change)
         - REMOVED → REMOVED: File still not in timeline (no change)
+        - NEWER_PROJECT → IN_USE: File from newer project is now used in timeline
+        - NEWER_PROJECT → NEWER_PROJECT: File remains in newer project only (no change)
 
         Args:
             timeline_path: Path to OTIO timeline file
@@ -205,6 +214,14 @@ class TimelineTracker:
                     # File still not used
                     new_state = FileState.NEW
 
+                case (FileState.NEWER_PROJECT, True):
+                    # File from newer project is now in timeline
+                    new_state = FileState.IN_USE
+
+                case (FileState.NEWER_PROJECT, False):
+                    # File remains in newer project only
+                    new_state = FileState.NEWER_PROJECT
+
                 case _:
                     # This should be unreachable due to exhaustive matching
                     raise RuntimeError(f"Unexpected state combination: {record.state}, {is_in_timeline}")
@@ -237,5 +254,6 @@ class TimelineTracker:
             "total": len(self.state.files),
             "new": len(self.state.new_files),
             "in_use": len(self.state.in_use_files),
-            "removed": len(self.state.removed_files)
+            "removed": len(self.state.removed_files),
+            "newer_project": len(self.state.newer_project_files)
         }
