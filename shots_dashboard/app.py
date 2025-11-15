@@ -68,6 +68,7 @@ def create_app(
         db_path = Path.home() / ".shots_dashboard" / "state.json"
 
     app.config['DATABASE_PATH'] = db_path
+    app.config['WATCH_DIR'] = watch_dir
     app.config['JSON_SORT_KEYS'] = False
     app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
 
@@ -272,7 +273,8 @@ def create_app(
             tracker = get_tracker()
             transitions = tracker.scan_directory(
                 directory,
-                extensions if extensions else None
+                extensions if extensions else None,
+                watch_dir=app.config.get('WATCH_DIR')
             )
             save_tracker(tracker)
 
@@ -757,7 +759,7 @@ def create_app(
         logger.debug(f"Media scan directory: {media_dir}")
         try:
             tracker = get_tracker()
-            transitions = tracker.scan_directory(media_dir)
+            transitions = tracker.scan_directory(media_dir, watch_dir=watch_dir)
             save_tracker(tracker)
 
             logger.info(f"   ✓ Found {len(transitions)} media files")
@@ -778,15 +780,20 @@ def create_app(
                 tracker = get_tracker()
 
                 # Track the new file by scanning its parent directory
-                # This will pick up the new file and mark it as NEW
-                transitions = tracker.scan_directory(media_path.parent, extensions={media_path.suffix.lower()})
+                # State will be NEW or REMOVED based on .prproj history
+                transitions = tracker.scan_directory(
+                    media_path.parent,
+                    extensions={media_path.suffix.lower()},
+                    watch_dir=watch_dir
+                )
                 save_tracker(tracker)
 
                 # Emit state update
                 if transitions:
                     emit_state_update('scan_complete')
                     logger.info(f"   ✓ Tracked new file: {media_path.name}")
-                    logger.info(f"   File state: NEW")
+                    if transitions:
+                        logger.info(f"   File state: {transitions[0].new_state.name}")
             except Exception as e:
                 logger.error(f"   ✗ Error tracking {media_path.name}: {e}")
 

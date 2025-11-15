@@ -15,8 +15,10 @@ import opentimelineio as otio
 
 try:
     from .models import FileRecord, FileState, StateTransition, TrackerState, TimelineSnapshot
+    from .prproj_parser import scan_prproj_files, was_in_older_project
 except ImportError:
     from models import FileRecord, FileState, StateTransition, TrackerState, TimelineSnapshot
+    from prproj_parser import scan_prproj_files, was_in_older_project
 
 
 class TimelineTracker:
@@ -29,8 +31,15 @@ class TimelineTracker:
 
     def __init__(self, state: TrackerState):
         self.state = state
+        self._prproj_cache: dict[Path, Set[str]] | None = None
+        self._prproj_cache_dir: Path | None = None
 
-    def scan_directory(self, directory: Path, extensions: Set[str] | None = None) -> list[StateTransition]:
+    def scan_directory(
+        self,
+        directory: Path,
+        extensions: Set[str] | None = None,
+        watch_dir: Path | None = None
+    ) -> list[StateTransition]:
         """
         Scan a directory for media files and update state.
 
@@ -38,6 +47,8 @@ class TimelineTracker:
             directory: Directory to scan
             extensions: Set of file extensions to include (e.g., {'.mov', '.mp4'})
                        If None, includes common video formats
+            watch_dir: Optional directory to scan for .prproj files to determine
+                      if newly found files should be marked as REMOVED instead of NEW
 
         Returns:
             List of state transitions that occurred
@@ -48,6 +59,14 @@ class TimelineTracker:
 
         if not directory.exists():
             raise ValueError(f"Directory does not exist: {directory}")
+
+        # Scan for .prproj files if watch_dir is provided (cache results)
+        prproj_media: dict[Path, Set[str]] = {}
+        if watch_dir and watch_dir.exists():
+            if self._prproj_cache is None or self._prproj_cache_dir != watch_dir:
+                self._prproj_cache = scan_prproj_files(watch_dir)
+                self._prproj_cache_dir = watch_dir
+            prproj_media = self._prproj_cache
 
         # Find all media files
         found_files: Set[Path] = set()
@@ -60,16 +79,27 @@ class TimelineTracker:
         # Add new files
         for file_path in found_files:
             if file_path not in self.state.files:
+                # Determine initial state based on .prproj history
+                initial_state = FileState.NEW
+
+                # Check if this file was in an older Premiere Pro project
+                if prproj_media and was_in_older_project(
+                    file_path.name,
+                    prproj_media,
+                    self.state.timeline_path
+                ):
+                    initial_state = FileState.REMOVED
+
                 record = FileRecord(
                     path=file_path,
-                    state=FileState.NEW,
+                    state=initial_state,
                     last_updated=datetime.now()
                 )
                 self.state.update_file(record)
                 transitions.append(StateTransition(
                     path=file_path,
                     old_state=None,
-                    new_state=FileState.NEW
+                    new_state=initial_state
                 ))
 
         self.state.last_scan = datetime.now()
