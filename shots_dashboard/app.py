@@ -323,7 +323,6 @@ def create_app(
                 return {
                     "path": str(record.path),
                     "name": name,
-                    "state": record.state.name,
                     "last_updated": record.last_updated.isoformat()
                 }
 
