@@ -170,5 +170,62 @@ def test_only_ignores_png_jpg_in_matching_directory():
         assert tracker.state.get_file(root_img) is not None
 
 
+def test_preserves_newer_project_images_despite_video():
+    """Test that NEWER_PROJECT images are preserved even when video exists."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+
+        # Create directory structure with images
+        source_dir = tmpdir / "shot001"
+        source_dir.mkdir()
+        img1 = source_dir / "frame_001.png"
+        img1.touch()
+
+        # Create a fake .prproj file
+        prproj_dir = tmpdir / "projects"
+        prproj_dir.mkdir()
+        prproj_file = prproj_dir / "project.prproj"
+
+        # We'll manually mark the file as NEWER_PROJECT to simulate
+        # what would happen if it was in a newer .prproj
+        state = TrackerState()
+        tracker = TimelineTracker(state)
+
+        # First scan - just the image
+        tracker.scan_directory(tmpdir)
+
+        # Manually mark the image as NEWER_PROJECT
+        # (simulating what would happen with a real .prproj scan)
+        from models import FileRecord, FileState
+        from datetime import datetime
+
+        record = tracker.state.get_file(img1)
+        if record:
+            newer_record = FileRecord(
+                path=img1,
+                state=FileState.NEWER_PROJECT,
+                last_updated=datetime.now()
+            )
+            tracker.state.update_file(newer_record)
+
+        # Verify it's NEWER_PROJECT
+        assert tracker.state.get_file(img1).state == FileState.NEWER_PROJECT
+
+        # Now create the video file
+        video_file = tmpdir / "shot001.mov"
+        video_file.touch()
+
+        # Scan again - the image should NOT be removed despite matching video
+        tracker.scan_directory(tmpdir)
+
+        # NEWER_PROJECT images should be preserved
+        img_record = tracker.state.get_file(img1)
+        assert img_record is not None, "NEWER_PROJECT image was incorrectly removed"
+        assert img_record.state == FileState.NEWER_PROJECT
+
+        # Video should also be tracked
+        assert tracker.state.get_file(video_file) is not None
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
