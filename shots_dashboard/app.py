@@ -559,8 +559,6 @@ def create_app(
                     mimetype = 'audio/ogg'
                 elif ext == '.mp3':
                     mimetype = 'audio/mpeg'
-                elif ext == '.wav':
-                    mimetype = 'audio/wav'
                 elif ext == '.m4a':
                     mimetype = 'audio/mp4'
                 else:

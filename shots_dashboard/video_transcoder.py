@@ -123,14 +123,14 @@ def is_web_compatible(file_path: Path) -> bool:
     # Quick check: non-web extensions are definitely not compatible
     ext = file_path.suffix.lower()
     non_web_video_formats = {'.mov', '.avi', '.mxf', '.mkv', '.m4v', '.mpg', '.mpeg', '.wmv', '.flv'}
-    non_web_audio_formats = {'.aif', '.aiff'}
+    non_web_audio_formats = {'.aif', '.aiff', '.wav'}
 
     if ext in non_web_video_formats or ext in non_web_audio_formats:
         return False
 
     # Web-compatible formats
     web_video_formats = {'.mp4', '.webm', '.ogg', '.ogv'}
-    web_audio_formats = {'.mp3', '.m4a', '.ogg', '.oga', '.wav'}
+    web_audio_formats = {'.mp3', '.m4a', '.ogg', '.oga'}
 
     if ext not in (web_video_formats | web_audio_formats):
         return False
@@ -147,7 +147,7 @@ def is_web_compatible(file_path: Path) -> bool:
 
         # Check if video codec is browser-compatible
         web_video_codecs = {'h264', 'vp8', 'vp9', 'av1', 'theora'}
-        web_audio_codecs = {'aac', 'mp3', 'vorbis', 'opus', 'flac', 'pcm'}
+        web_audio_codecs = {'aac', 'mp3', 'vorbis', 'opus', 'flac'}
 
         # For audio-only files (no video codec)
         if not video_codec:
