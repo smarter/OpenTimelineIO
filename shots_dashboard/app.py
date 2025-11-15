@@ -912,6 +912,16 @@ def create_app(
             filename = data['path']
             clip_data = data['clip_data']
 
+            # Debug logging to see what frontend is sending
+            logger.info(f"Clip preview request for: {filename}")
+            logger.info(f"Clip data received: {clip_data}")
+            logger.info(f"  - Has duration: {'duration' in clip_data}")
+            logger.info(f"  - Has speed: {'speed' in clip_data}")
+            if 'duration' in clip_data:
+                logger.info(f"  - Duration value: {clip_data['duration']}")
+            if 'speed' in clip_data:
+                logger.info(f"  - Speed value: {clip_data['speed']}")
+
             # Resolve filename to full path using tracker's file list
             tracker = get_tracker()
             source_path = None
