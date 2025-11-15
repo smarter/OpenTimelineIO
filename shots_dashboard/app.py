@@ -39,7 +39,7 @@ except ImportError:
         is_web_compatible,
         is_audio_only,
         check_ffmpeg_available,
-        stream_transcode_webm,
+        transcode_to_webm,
         transcode_to_ogg,
         TranscodingError
     )
@@ -613,28 +613,22 @@ def create_app(
                         "error": f"Audio transcoding failed: {str(e)}"
                     }), 500
             else:
-                # Transcode on-the-fly to WebM for video files
+                # Transcode to WebM for video files (with caching)
                 logger.debug(f"Starting video transcode to WebM: {file_path}")
                 try:
-                    process = stream_transcode_webm(file_path)
+                    output_path = transcode_to_webm(file_path)
 
                     def generate():
-                        try:
-                            while True:
-                                chunk = process.stdout.read(8192)
-                                if not chunk:
-                                    break
+                        with open(output_path, 'rb') as f:
+                            while chunk := f.read(8192):
                                 yield chunk
-                        finally:
-                            process.terminate()
-                            process.wait()
 
                     return Response(
                         stream_with_context(generate()),
                         mimetype='video/webm',
                         headers={
                             'Content-Type': 'video/webm',
-                            'Cache-Control': 'no-cache'
+                            'Accept-Ranges': 'bytes'
                         }
                     )
 

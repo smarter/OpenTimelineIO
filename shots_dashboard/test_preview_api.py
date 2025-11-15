@@ -94,7 +94,7 @@ def test_preview_nonexistent_file(test_env):
 
 
 def test_cache_functionality(test_env):
-    """Test that transcoded files are cached properly."""
+    """Test that transcoded video files are cached properly."""
     app = test_env['app']
     cache_dir = test_env['cache_dir']
 
@@ -103,35 +103,45 @@ def test_cache_functionality(test_env):
     if not check_ffmpeg_available():
         pytest.skip("ffmpeg not available for cache testing")
 
+    import time
+
     with app.test_client() as client:
         # First request - should create cache
+        print(f"\n  First request for test_video.mov")
         response1 = client.get('/api/preview/test_video.mov')
 
         if response1.status_code != 200:
-            pytest.skip("Transcoding failed, cannot test cache")
+            pytest.skip(f"Transcoding failed: {response1.status_code}")
 
-        # Check cache directory
-        if cache_dir.exists():
-            cached_files = list(cache_dir.glob("test_video.*.webm"))
-            assert len(cached_files) > 0, "Cache file should exist"
+        # Consume response data
+        data1 = response1.data
+        assert len(data1) > 0, "Response should have data"
 
-            cache_file = cached_files[0]
-            cache_size = cache_file.stat().st_size
-            cache_mtime = cache_file.stat().st_mtime
+        # Check cache directory exists and has the file
+        assert cache_dir.exists(), "Cache directory should exist"
+        cached_files = list(cache_dir.glob("test_video.*.webm"))
+        assert len(cached_files) > 0, "Cache file should exist"
 
-            print(f"✓ Cache created: {cache_file.name} ({cache_size} bytes)")
+        cache_file = cached_files[0]
+        cache_size = cache_file.stat().st_size
+        cache_mtime = cache_file.stat().st_mtime
 
-            # Second request - should use cache (same file)
-            import time
-            time.sleep(0.1)
-            response2 = client.get('/api/preview/test_video.mov')
+        print(f"  ✓ Cache created: {cache_file.name} ({cache_size} bytes)")
 
-            # Cache file should not have been modified
-            new_mtime = cache_file.stat().st_mtime
-            assert new_mtime == cache_mtime, "Cache file should be reused"
-            print("✓ Cache reused on second request")
-        else:
-            print("⚠ Cache directory not created (may be expected behavior)")
+        # Second request - should use cache (same file)
+        time.sleep(0.2)
+        print(f"  Second request for test_video.mov")
+        response2 = client.get('/api/preview/test_video.mov')
+        assert response2.status_code == 200
+
+        # Consume response data
+        data2 = response2.data
+
+        # Cache file should not have been modified (reused)
+        new_mtime = cache_file.stat().st_mtime
+        assert new_mtime == cache_mtime, "Cache file should be reused, not regenerated"
+        assert len(data2) == len(data1), "Both responses should have same data"
+        print(f"  ✓ Cache reused on second request (mtime unchanged)")
 
 
 def test_audio_file_handling(test_env):
