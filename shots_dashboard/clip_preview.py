@@ -226,22 +226,35 @@ class ClipPreviewGenerator:
         has_audio = self._has_audio_stream(source_path)
 
         if needs_speed_change:
-            # For speed changes, do trimming in the filter to avoid conflicts
-            # Calculate end time for trimming
+            # For speed changes, need to calculate exact output duration
+            # Get source frame rate and calculate target output params
+            source_fps = self._get_frame_rate(source_path)
+            logger.debug(f"Source frame rate: {source_fps} fps")
+
+            # Get the timeline duration from clip_data (what the output should be)
+            timeline_duration = clip_data.get("duration")
+            if timeline_duration is None and duration is not None:
+                # Calculate from source duration and speed
+                timeline_duration = duration / speed
+
+            logger.debug(f"Source extraction: {duration:.3f}s, Timeline duration: {timeline_duration:.3f}s, Speed: {speed}")
+
+            # Calculate exact end time for trimming
             if duration is not None and start is not None:
                 end_time = start + duration
             else:
                 end_time = None
 
-            # Get source frame rate for frame-accurate output
-            source_fps = self._get_frame_rate(source_path)
-            logger.debug(f"Source frame rate: {source_fps} fps")
-
             filter_parts = []
 
-            # Video: trim, reset PTS, apply speed, then fps filter for frame accuracy
-            # The fps filter ensures exact frame count for the output duration
-            if end_time is not None:
+            # Video: trim source, apply speed, then limit to exact output duration
+            # Use trim to extract source, setpts for speed, then trim again to exact timeline duration
+            if end_time is not None and timeline_duration is not None:
+                filter_parts.append(
+                    f"[0:v]trim=start={start}:end={end_time},setpts=PTS-STARTPTS,"
+                    f"setpts=PTS/{speed},trim=duration={timeline_duration},setpts=PTS-STARTPTS,fps={source_fps}[v]"
+                )
+            elif end_time is not None:
                 filter_parts.append(
                     f"[0:v]trim=start={start}:end={end_time},setpts=PTS-STARTPTS,"
                     f"setpts=PTS/{speed},fps={source_fps}[v]"
