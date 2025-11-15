@@ -355,16 +355,27 @@ class ShotsDashboard {
     setupWebSocket() {
         // Connect to WebSocket server
         this.socket = io();
+        this.wasDisconnected = false;
 
         // Handle connection
         this.socket.on('connect', () => {
             console.log('WebSocket connected');
+
+            // If we were previously disconnected, the server likely restarted
+            // Reload the page to get fresh HTML/CSS/JS
+            if (this.wasDisconnected) {
+                console.log('Server restarted - reloading page...');
+                window.location.reload();
+                return;
+            }
+
             this.showStatus('Connected', 'success');
         });
 
         // Handle disconnection
         this.socket.on('disconnect', () => {
             console.log('WebSocket disconnected');
+            this.wasDisconnected = true;
             this.showStatus('Disconnected - Reconnecting...', 'error');
         });
 
