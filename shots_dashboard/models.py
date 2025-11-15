@@ -178,6 +178,57 @@ class TrackerState:
         """Get file record by path."""
         return self.files.get(path)
 
+    def get_files_as_sequences(self, state: FileState) -> list[FileRecord]:
+        """
+        Get files grouped into sequences where appropriate.
+
+        When an entire folder of images is in the same state, represent them
+        as a single sequence (e.g., 'folder/*.png') instead of individual files.
+
+        Args:
+            state: The file state to filter by
+
+        Returns:
+            List of file records, with image folders collapsed into sequences
+        """
+        files_in_state = self.get_files_by_state(state)
+
+        # Group image files by (parent directory, extension)
+        from collections import defaultdict
+        image_extensions = {'.png', '.jpg', '.jpeg'}
+
+        image_groups: dict[tuple[Path, str], list[FileRecord]] = defaultdict(list)
+        non_image_files: list[FileRecord] = []
+
+        for record in files_in_state:
+            if record.path.suffix.lower() in image_extensions:
+                key = (record.path.parent, record.path.suffix.lower())
+                image_groups[key].append(record)
+            else:
+                non_image_files.append(record)
+
+        # Build result: sequences for image groups, individual files otherwise
+        result = non_image_files.copy()
+
+        for (parent_dir, ext), records in image_groups.items():
+            if len(records) > 1:
+                # Multiple images in same directory with same extension and state
+                # Create a synthetic "sequence" record
+                sequence_path = parent_dir / f"*{ext}"
+                # Use the most recent timestamp
+                most_recent = max(r.last_updated for r in records)
+                sequence_record = FileRecord(
+                    path=sequence_path,
+                    state=state,
+                    last_updated=most_recent
+                )
+                result.append(sequence_record)
+            else:
+                # Single image file, keep as-is
+                result.extend(records)
+
+        return sorted(result, key=lambda f: str(f.path))
+
 
 @dataclass(frozen=True)
 class StateTransition:

@@ -128,15 +128,11 @@ class TimelineTracker:
         transitions: list[StateTransition] = []
 
         # Remove previously tracked files that should now be ignored
-        # BUT: Don't remove files in NEWER_PROJECT state - they're in active development
         for file_path in list(self.state.files.keys()):
             if should_filter_image(file_path):
-                record = self.state.files.get(file_path)
-                # Keep NEWER_PROJECT files - user wants to see what's in their WIP
-                if record and record.state != FileState.NEWER_PROJECT:
-                    del self.state.files[file_path]
-                    # Note: We don't add a transition here since the file isn't truly changing state,
-                    # it's just being filtered out from tracking
+                del self.state.files[file_path]
+                # Note: We don't add a transition here since the file isn't truly changing state,
+                # it's just being filtered out from tracking
 
         # Add new files
         for file_path in found_files:

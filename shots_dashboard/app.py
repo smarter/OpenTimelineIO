@@ -97,17 +97,21 @@ def create_app(
         try:
             tracker = get_tracker()
 
-            # Get all current state
+            # Get all current state (grouped as sequences where appropriate)
             stats = tracker.get_stats()
+
+            # Import FileState to use with get_files_as_sequences
+            from models import FileState
+
             files = {
                 "new": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
-                        for f in tracker.state.new_files],
+                        for f in tracker.state.get_files_as_sequences(FileState.NEW)],
                 "in_use": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
-                          for f in tracker.state.in_use_files],
+                          for f in tracker.state.get_files_as_sequences(FileState.IN_USE)],
                 "removed": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
-                           for f in tracker.state.removed_files],
+                           for f in tracker.state.get_files_as_sequences(FileState.REMOVED)],
                 "newer_project": [{"path": str(f.path), "name": f.path.name, "last_updated": f.last_updated.isoformat()}
-                                 for f in tracker.state.newer_project_files],
+                                 for f in tracker.state.get_files_as_sequences(FileState.NEWER_PROJECT)],
             }
 
             # Get timeline history
@@ -243,13 +247,16 @@ def create_app(
                     "last_updated": record.last_updated.isoformat()
                 }
 
+            # Import FileState for sequence grouping
+            from models import FileState
+
             return jsonify({
                 "success": True,
                 "files": {
-                    "new": [serialize_file(f) for f in state.new_files],
-                    "in_use": [serialize_file(f) for f in state.in_use_files],
-                    "removed": [serialize_file(f) for f in state.removed_files],
-                    "newer_project": [serialize_file(f) for f in state.newer_project_files]
+                    "new": [serialize_file(f) for f in state.get_files_as_sequences(FileState.NEW)],
+                    "in_use": [serialize_file(f) for f in state.get_files_as_sequences(FileState.IN_USE)],
+                    "removed": [serialize_file(f) for f in state.get_files_as_sequences(FileState.REMOVED)],
+                    "newer_project": [serialize_file(f) for f in state.get_files_as_sequences(FileState.NEWER_PROJECT)]
                 }
             }), 200
 
