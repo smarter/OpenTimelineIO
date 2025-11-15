@@ -144,10 +144,11 @@ class TrackerState:
     timeline_history: TimelineHistory = field(default_factory=TimelineHistory)
 
     def get_files_by_state(self, state: FileState) -> list[FileRecord]:
-        """Get all files in a specific state, sorted by path."""
+        """Get all files in a specific state, sorted by most recent first."""
         return sorted(
             [f for f in self.files.values() if f.state == state],
-            key=lambda f: str(f.path)
+            key=lambda f: f.last_updated,
+            reverse=True  # Most recent first
         )
 
     @property
@@ -227,7 +228,8 @@ class TrackerState:
                 # Single image file, keep as-is
                 result.extend(records)
 
-        return sorted(result, key=lambda f: str(f.path))
+        # Sort by most recent first
+        return sorted(result, key=lambda f: f.last_updated, reverse=True)
 
 
 @dataclass(frozen=True)
