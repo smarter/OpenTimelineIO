@@ -570,7 +570,25 @@ class ShotsDashboard {
             this.previewPopup.style.top = top + 'px';
             this.previewPopup.style.display = 'block';
 
-            // Load video
+            // Determine MIME type based on file extension
+            const ext = filename.toLowerCase().split('.').pop();
+            const mimeTypes = {
+                'mp4': 'video/mp4',
+                'webm': 'video/webm',
+                'ogg': 'audio/ogg',
+                'oga': 'audio/ogg',
+                'wav': 'audio/wav',
+                'mp3': 'audio/mpeg',
+                'm4a': 'audio/mp4',
+                'mov': 'video/webm',  // Transcoded
+                'avi': 'video/webm',  // Transcoded
+                'aiff': 'audio/ogg',  // Transcoded
+                'aif': 'audio/ogg'    // Transcoded
+            };
+            const mimeType = mimeTypes[ext] || 'video/webm';
+
+            // Load video/audio
+            this.previewSource.type = mimeType;
             this.previewSource.src = `/api/preview/${encodeURIComponent(filename)}`;
             this.previewPlayer.load();
 
