@@ -557,10 +557,17 @@ def create_app(
                         # Get source range for merging logic
                         source_start = None
                         source_end = None
+                        source_duration = None
                         if item.source_range:
                             source_start = float(item.source_range.start_time.value) / float(item.source_range.start_time.rate)
                             source_duration = float(item.source_range.duration.value) / float(item.source_range.duration.rate)
                             source_end = source_start + source_duration
+
+                        # Calculate speed factor (source_duration / timeline_duration)
+                        # speed > 1.0: sped up, speed < 1.0: slowed down, speed = 1.0: normal
+                        speed = None
+                        if source_duration is not None and duration_seconds_clip > 0:
+                            speed = source_duration / duration_seconds_clip
 
                         clips_data.append({
                             "name": item.name or "Unnamed Clip",
@@ -568,7 +575,9 @@ def create_app(
                             "duration": duration_seconds_clip,
                             "end": start_seconds + duration_seconds_clip,
                             "source_start": source_start,
-                            "source_end": source_end
+                            "source_end": source_end,
+                            "source_duration": source_duration,
+                            "speed": speed
                         })
 
                 # Merge adjacent clips with the same name (preserving segment info)
@@ -583,18 +592,34 @@ def create_app(
                         # Add segment info
                         if "segments" not in merged_clips[-1]:
                             # Convert first clip to segments format
+                            first_timeline_end = merged_clips[-1]["segments_end"] if "segments_end" in merged_clips[-1] else clip["start"]
+                            first_timeline_duration = first_timeline_end - merged_clips[-1]["start"]
+                            first_source_duration = merged_clips[-1]["source_end"] - merged_clips[-1]["source_start"] if merged_clips[-1]["source_end"] and merged_clips[-1]["source_start"] else None
+                            first_speed = merged_clips[-1].get("speed")
+
                             merged_clips[-1]["segments"] = [{
                                 "timeline_start": merged_clips[-1]["start"],
-                                "timeline_end": merged_clips[-1]["segments_end"] if "segments_end" in merged_clips[-1] else clip["start"],
+                                "timeline_end": first_timeline_end,
+                                "timeline_duration": first_timeline_duration,
                                 "source_start": merged_clips[-1]["source_start"],
-                                "source_end": merged_clips[-1]["source_end"]
+                                "source_end": merged_clips[-1]["source_end"],
+                                "source_duration": first_source_duration,
+                                "speed": first_speed
                             }]
+
                         # Add current clip as a segment
+                        segment_timeline_duration = clip["end"] - clip["start"]
+                        segment_source_duration = clip.get("source_duration")
+                        segment_speed = clip.get("speed")
+
                         merged_clips[-1]["segments"].append({
                             "timeline_start": clip["start"],
                             "timeline_end": clip["end"],
+                            "timeline_duration": segment_timeline_duration,
                             "source_start": clip["source_start"],
-                            "source_end": clip["source_end"]
+                            "source_end": clip["source_end"],
+                            "source_duration": segment_source_duration,
+                            "speed": segment_speed
                         })
                         merged_clips[-1]["segments_end"] = clip["end"]
                     else:

@@ -158,8 +158,9 @@ class ClipPreviewGenerator:
         Generate preview for simple or continuous clip using accurate seeking.
 
         For maximum precision, uses -ss after -i (accurate seeking).
+        Applies speed changes if present.
         """
-        # Determine start and duration
+        # Determine start, duration, and speed
         if "segments" in clip_data and clip_data["segments"]:
             # Continuous segments: use first start and last end
             segments = clip_data["segments"]
@@ -169,6 +170,8 @@ class ClipPreviewGenerator:
                 duration = end - start
             else:
                 duration = None
+            # Use speed from first segment (should be same for continuous)
+            speed = segments[0].get("speed", 1.0)
         else:
             # Simple clip
             start = clip_data.get("source_start", 0)
@@ -177,6 +180,11 @@ class ClipPreviewGenerator:
                 duration = end - start
             else:
                 duration = None
+            speed = clip_data.get("speed", 1.0)
+
+        # Check if we need to apply speed changes
+        # Consider speeds within 1% of 1.0 as normal (no speed change needed)
+        needs_speed_change = speed is not None and abs(speed - 1.0) > 0.01
 
         # Build FFmpeg command for accurate seeking
         # For maximum precision: input first, then -ss (accurate but slower)
@@ -191,11 +199,31 @@ class ClipPreviewGenerator:
         if duration is not None:
             cmd.extend(["-t", str(duration)])
 
-        # Re-encode for accuracy (don't use -c copy)
-        # Use reasonable quality settings
         # Check if source has audio
         has_audio = self._has_audio_stream(source_path)
 
+        if needs_speed_change:
+            # Use filter for speed changes
+            filter_parts = []
+
+            # Video speed: setpts=PTS/speed
+            filter_parts.append(f"[0:v]setpts=PTS/{speed}[v]")
+
+            if has_audio:
+                # Audio speed: atempo (limited to 0.5-2.0, chain if needed)
+                audio_filter = self._build_atempo_filter(speed, "[0:a]", "[a]")
+                filter_parts.append(audio_filter)
+
+            cmd.extend(["-filter_complex", ";".join(filter_parts)])
+            cmd.extend(["-map", "[v]"])
+            if has_audio:
+                cmd.extend(["-map", "[a]"])
+        else:
+            # No speed change, use regular stream copy
+            pass
+
+        # Re-encode for accuracy (don't use -c copy)
+        # Use reasonable quality settings
         cmd.extend([
             "-c:v", "libx264",
             "-preset", "fast",
@@ -247,31 +275,61 @@ class ClipPreviewGenerator:
         for i, segment in enumerate(segments):
             start = segment.get("source_start", 0)
             end = segment.get("source_end")
+            speed = segment.get("speed", 1.0)
 
             if end is None:
                 raise PreviewGenerationError(f"Segment {i} missing source_end")
 
+            # Check if we need speed changes (consider within 1% of 1.0 as normal)
+            needs_speed = speed is not None and abs(speed - 1.0) > 0.01
+
             if is_audio_only:
                 # Audio-only file
-                filter_parts.append(
-                    f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
-                )
+                if needs_speed:
+                    # Trim, reset PTS, then apply speed
+                    atempo_chain = self._build_atempo_chain(speed)
+                    filter_parts.append(
+                        f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,{atempo_chain}[a{i}]"
+                    )
+                else:
+                    filter_parts.append(
+                        f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
+                    )
                 concat_inputs.append(f"[a{i}]")
+
             elif has_audio:
                 # Video with audio
-                filter_parts.append(
-                    f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}]"
-                )
-                filter_parts.append(
-                    f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
-                )
+                if needs_speed:
+                    # Video: trim, reset PTS, then apply speed via setpts
+                    filter_parts.append(
+                        f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v{i}]"
+                    )
+                    # Audio: trim, reset PTS, then apply speed via atempo
+                    atempo_chain = self._build_atempo_chain(speed)
+                    filter_parts.append(
+                        f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,{atempo_chain}[a{i}]"
+                    )
+                else:
+                    filter_parts.append(
+                        f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}]"
+                    )
+                    filter_parts.append(
+                        f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
+                    )
                 # Concat expects interleaved: [v0][a0][v1][a1]...
                 concat_inputs.extend([f"[v{i}]", f"[a{i}]"])
+
             else:
                 # Video without audio
-                filter_parts.append(
-                    f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}]"
-                )
+                if needs_speed:
+                    # Video: trim, reset PTS, then apply speed via setpts
+                    filter_parts.append(
+                        f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS,setpts=PTS/{speed}[v{i}]"
+                    )
+                else:
+                    filter_parts.append(
+                        f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}]"
+                    )
                 concat_inputs.append(f"[v{i}]")
 
         # Concatenate all segments
@@ -365,6 +423,60 @@ class ClipPreviewGenerator:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             # If ffprobe fails, guess from extension
             return False
+
+    def _build_atempo_chain(self, speed: float) -> str:
+        """
+        Build atempo filter chain for audio speed changes.
+
+        FFmpeg's atempo filter is limited to 0.5-2.0 range.
+        For values outside this, we chain multiple atempo filters.
+
+        Examples:
+            speed=2.0  → "atempo=2.0"
+            speed=4.0  → "atempo=2.0,atempo=2.0"
+            speed=0.25 → "atempo=0.5,atempo=0.5"
+            speed=3.0  → "atempo=2.0,atempo=1.5"
+        """
+        if speed <= 0:
+            raise PreviewGenerationError(f"Invalid speed: {speed} (must be > 0)")
+
+        filters = []
+        remaining_speed = speed
+
+        # Handle speeds > 2.0 by chaining 2.0x filters
+        while remaining_speed > 2.0:
+            filters.append("atempo=2.0")
+            remaining_speed /= 2.0
+
+        # Handle speeds < 0.5 by chaining 0.5x filters
+        while remaining_speed < 0.5:
+            filters.append("atempo=0.5")
+            remaining_speed /= 0.5
+
+        # Add the final filter for the remaining speed
+        if abs(remaining_speed - 1.0) > 0.01:  # Only add if not 1.0
+            filters.append(f"atempo={remaining_speed:.6f}")
+
+        if not filters:
+            # No speed change needed
+            return "atempo=1.0"
+
+        return ",".join(filters)
+
+    def _build_atempo_filter(self, speed: float, input_label: str, output_label: str) -> str:
+        """
+        Build complete atempo filter with input/output labels.
+
+        Args:
+            speed: Speed factor (source_duration / timeline_duration)
+            input_label: Input stream label (e.g., "[0:a]")
+            output_label: Output stream label (e.g., "[a]")
+
+        Returns:
+            Complete filter string (e.g., "[0:a]atempo=2.0[a]")
+        """
+        atempo_chain = self._build_atempo_chain(speed)
+        return f"{input_label}{atempo_chain}{output_label}"
 
     def _has_audio_stream(self, source_path: Path) -> bool:
         """
