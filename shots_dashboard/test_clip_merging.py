@@ -80,32 +80,43 @@ def test_merge_continuous_source_ranges():
                     "source_end": source_end
                 })
 
-        # Merge adjacent clips with same name and continuous source ranges
+        # Merge adjacent clips with same name
         merged_clips = []
         for clip in clips_data:
             if merged_clips and \
                merged_clips[-1]["name"] == clip["name"] and \
-               abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
-               merged_clips[-1]["source_end"] is not None and \
-               clip["source_start"] is not None and \
-               abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
-                # Extend the previous clip
+               abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:
                 merged_clips[-1]["end"] = clip["end"]
                 merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
-                merged_clips[-1]["source_end"] = clip["source_end"]
+                if "segments" not in merged_clips[-1]:
+                    merged_clips[-1]["segments"] = [{
+                        "timeline_start": merged_clips[-1]["start"],
+                        "timeline_end": merged_clips[-1].get("segments_end", clip["start"]),
+                        "source_start": merged_clips[-1]["source_start"],
+                        "source_end": merged_clips[-1]["source_end"]
+                    }]
+                merged_clips[-1]["segments"].append({
+                    "timeline_start": clip["start"],
+                    "timeline_end": clip["end"],
+                    "source_start": clip["source_start"],
+                    "source_end": clip["source_end"]
+                })
+                merged_clips[-1]["segments_end"] = clip["end"]
             else:
-                merged_clips.append(clip)
+                merged_clips.append(clip.copy())
 
-        # Should have merged into 1 clip
+        # Should have merged into 1 clip with 2 segments
         assert len(merged_clips) == 1
         assert merged_clips[0]["name"] == "car-crash-back-001.mov"
         assert abs(merged_clips[0]["duration"] - 1.46) < 0.01  # Combined duration
+        assert "segments" in merged_clips[0]
+        assert len(merged_clips[0]["segments"]) == 2
 
 
-def test_dont_merge_discontinuous_source_ranges():
-    """Test that clips with discontinuous source ranges are NOT merged."""
+def test_merge_discontinuous_source_ranges_with_segments():
+    """Test that clips with discontinuous source ranges ARE merged with segment info."""
     # Based on real data: INSERT_SOLEIL_001.mp4 clips
-    # Both read from source 0.00-1.00 (same section repeated)
+    # Both read from source 0.00-1.00 (same section repeated - a loop effect)
 
     timeline = otio.schema.Timeline(name="Test Timeline")
     track = otio.schema.Track(name="V1", kind=otio.schema.TrackKind.Video)
@@ -160,23 +171,38 @@ def test_dont_merge_discontinuous_source_ranges():
                     "source_end": source_end
                 })
 
-        # Merge logic
+        # Merge logic (now merges all adjacent clips with same name)
         merged_clips = []
         for clip in clips_data:
             if merged_clips and \
                merged_clips[-1]["name"] == clip["name"] and \
-               abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
-               merged_clips[-1]["source_end"] is not None and \
-               clip["source_start"] is not None and \
-               abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
+               abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:
                 merged_clips[-1]["end"] = clip["end"]
                 merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
-                merged_clips[-1]["source_end"] = clip["source_end"]
+                if "segments" not in merged_clips[-1]:
+                    merged_clips[-1]["segments"] = [{
+                        "timeline_start": merged_clips[-1]["start"],
+                        "timeline_end": merged_clips[-1].get("segments_end", clip["start"]),
+                        "source_start": merged_clips[-1]["source_start"],
+                        "source_end": merged_clips[-1]["source_end"]
+                    }]
+                merged_clips[-1]["segments"].append({
+                    "timeline_start": clip["start"],
+                    "timeline_end": clip["end"],
+                    "source_start": clip["source_start"],
+                    "source_end": clip["source_end"]
+                })
+                merged_clips[-1]["segments_end"] = clip["end"]
             else:
-                merged_clips.append(clip)
+                merged_clips.append(clip.copy())
 
-        # Should NOT merge - source ranges jump back to 0
-        assert len(merged_clips) == 2
+        # Should merge into 1 clip with 2 segments
+        assert len(merged_clips) == 1
+        assert "segments" in merged_clips[0]
+        assert len(merged_clips[0]["segments"]) == 2
+        # Verify segments preserve discontinuous source ranges
+        assert abs(merged_clips[0]["segments"][0]["source_start"] - 0.0) < 0.01
+        assert abs(merged_clips[0]["segments"][1]["source_start"] - 0.0) < 0.01  # Jumps back to 0
 
 
 def test_merge_postcrash_contrechamp():
@@ -240,19 +266,31 @@ def test_merge_postcrash_contrechamp():
         for clip in clips_data:
             if merged_clips and \
                merged_clips[-1]["name"] == clip["name"] and \
-               abs(merged_clips[-1]["end"] - clip["start"]) < 0.01 and \
-               merged_clips[-1]["source_end"] is not None and \
-               clip["source_start"] is not None and \
-               abs(merged_clips[-1]["source_end"] - clip["source_start"]) < 0.01:
+               abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:
                 merged_clips[-1]["end"] = clip["end"]
                 merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
-                merged_clips[-1]["source_end"] = clip["source_end"]
+                if "segments" not in merged_clips[-1]:
+                    merged_clips[-1]["segments"] = [{
+                        "timeline_start": merged_clips[-1]["start"],
+                        "timeline_end": merged_clips[-1].get("segments_end", clip["start"]),
+                        "source_start": merged_clips[-1]["source_start"],
+                        "source_end": merged_clips[-1]["source_end"]
+                    }]
+                merged_clips[-1]["segments"].append({
+                    "timeline_start": clip["start"],
+                    "timeline_end": clip["end"],
+                    "source_start": clip["source_start"],
+                    "source_end": clip["source_end"]
+                })
+                merged_clips[-1]["segments_end"] = clip["end"]
             else:
-                merged_clips.append(clip)
+                merged_clips.append(clip.copy())
 
-        # Should merge into 1 clip
+        # Should merge into 1 clip with 2 segments
         assert len(merged_clips) == 1
         assert abs(merged_clips[0]["duration"] - 1.67) < 0.05
+        assert "segments" in merged_clips[0]
+        assert len(merged_clips[0]["segments"]) == 2
 
 
 if __name__ == '__main__':
