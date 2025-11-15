@@ -529,9 +529,17 @@ class ShotsDashboard {
 
     setupVideoPreview() {
         this.previewPopup = document.getElementById('video-preview-popup');
-        this.previewPlayer = document.getElementById('video-preview-player');
-        this.previewSource = document.getElementById('video-preview-source');
+        this.videoPlayer = document.getElementById('video-preview-player');
+        this.videoSource = document.getElementById('video-preview-source');
+        this.audioPlayer = document.getElementById('audio-preview-player');
+        this.audioSource = document.getElementById('audio-preview-source');
         this.previewFilename = document.getElementById('video-preview-filename');
+    }
+
+    isAudioFile(filename) {
+        const ext = filename.toLowerCase().split('.').pop();
+        const audioExtensions = ['wav', 'mp3', 'ogg', 'oga', 'm4a', 'aiff', 'aif', 'flac', 'aac'];
+        return audioExtensions.includes(ext);
     }
 
     showVideoPreview(filename, element) {
@@ -548,10 +556,13 @@ class ShotsDashboard {
             this.previewPopup.classList.add('loading');
             this.previewFilename.textContent = filename;
 
+            // Determine if audio or video
+            const isAudio = this.isAudioFile(filename);
+
             // Position popup near the element
             const rect = element.getBoundingClientRect();
             const popupWidth = 400;
-            const popupHeight = 300;
+            const popupHeight = isAudio ? 100 : 300;  // Shorter for audio
 
             // Position to the right of element, or left if not enough space
             let left = rect.right + 10;
@@ -587,23 +598,50 @@ class ShotsDashboard {
             };
             const mimeType = mimeTypes[ext] || 'video/webm';
 
-            // Load video/audio
-            this.previewSource.type = mimeType;
-            this.previewSource.src = `/api/preview/${encodeURIComponent(filename)}`;
-            this.previewPlayer.load();
+            // Show appropriate player and hide the other
+            if (isAudio) {
+                this.audioPlayer.style.display = 'block';
+                this.videoPlayer.style.display = 'none';
 
-            // Start playing when loaded
-            this.previewPlayer.onloadeddata = () => {
-                this.previewPopup.classList.remove('loading');
-                this.previewPlayer.play().catch(err => {
-                    console.warn('Autoplay prevented:', err);
-                });
-            };
+                // Load audio
+                this.audioSource.type = mimeType;
+                this.audioSource.src = `/api/preview/${encodeURIComponent(filename)}`;
+                this.audioPlayer.load();
 
-            this.previewPlayer.onerror = () => {
-                console.error('Failed to load video preview');
-                this.hideVideoPreview();
-            };
+                // Start playing when loaded
+                this.audioPlayer.onloadeddata = () => {
+                    this.previewPopup.classList.remove('loading');
+                    this.audioPlayer.play().catch(err => {
+                        console.warn('Autoplay prevented:', err);
+                    });
+                };
+
+                this.audioPlayer.onerror = () => {
+                    console.error('Failed to load audio preview');
+                    this.hideVideoPreview();
+                };
+            } else {
+                this.videoPlayer.style.display = 'block';
+                this.audioPlayer.style.display = 'none';
+
+                // Load video
+                this.videoSource.type = mimeType;
+                this.videoSource.src = `/api/preview/${encodeURIComponent(filename)}`;
+                this.videoPlayer.load();
+
+                // Start playing when loaded
+                this.videoPlayer.onloadeddata = () => {
+                    this.previewPopup.classList.remove('loading');
+                    this.videoPlayer.play().catch(err => {
+                        console.warn('Autoplay prevented:', err);
+                    });
+                };
+
+                this.videoPlayer.onerror = () => {
+                    console.error('Failed to load video preview');
+                    this.hideVideoPreview();
+                };
+            }
         }, 300); // 300ms delay
     }
 
@@ -614,11 +652,20 @@ class ShotsDashboard {
         }
 
         this.previewPopup.style.display = 'none';
-        this.previewPlayer.pause();
 
-        // Clear the video source to stop any loading/downloading
-        this.previewSource.src = '';
-        this.previewPlayer.load(); // Trigger load with empty source to stop network activity
+        // Pause and clear both players
+        this.videoPlayer.pause();
+        this.audioPlayer.pause();
+
+        // Clear sources to stop any loading/downloading
+        this.videoSource.src = '';
+        this.audioSource.src = '';
+        this.videoPlayer.load();
+        this.audioPlayer.load();
+
+        // Hide both players
+        this.videoPlayer.style.display = 'none';
+        this.audioPlayer.style.display = 'none';
 
         this.currentPreviewFilename = null;
         this.previewPopup.classList.remove('loading');

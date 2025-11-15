@@ -550,6 +550,13 @@ input[type="text"]:focus {
     background: #000;
 }
 
+.audio-preview-player {
+    width: 100%;
+    display: block;
+    background: var(--bg-card);
+    border-radius: 4px;
+}
+
 .video-preview-loading {
     position: absolute;
     top: 50%;

@@ -125,12 +125,16 @@
             <div id="transitions-list"></div>
         </div>
 
-        <!-- Video Preview Popup -->
+        <!-- Media Preview Popup -->
         <div id="video-preview-popup" class="video-preview-popup" style="display: none;">
-            <video id="video-preview-player" class="video-preview-player" muted loop playsinline preload="none">
-                <source id="video-preview-source" type="video/webm">
+            <video id="video-preview-player" class="video-preview-player" muted loop playsinline preload="none" style="display: none;">
+                <source id="video-preview-source">
                 Your browser does not support video playback.
             </video>
+            <audio id="audio-preview-player" class="audio-preview-player" controls loop preload="none" style="display: none;">
+                <source id="audio-preview-source">
+                Your browser does not support audio playback.
+            </audio>
             <div class="video-preview-loading">Loading...</div>
             <div class="video-preview-filename" id="video-preview-filename"></div>
         </div>
