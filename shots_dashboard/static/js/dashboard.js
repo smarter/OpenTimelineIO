@@ -860,6 +860,14 @@ class ShotsDashboard {
             clip_data: {}
         };
 
+        // Add timeline position (for overlap detection with other clips)
+        if (clipData.start !== undefined) {
+            requestData.clip_data.start = clipData.start;
+        }
+        if (clipData.duration !== undefined) {
+            requestData.clip_data.duration = clipData.duration;
+        }
+
         // Add source range or segments
         if (clipData.segments) {
             // Merged clip with segments
@@ -870,10 +878,7 @@ class ShotsDashboard {
             requestData.clip_data.source_end = clipData.source_end;
         }
 
-        // IMPORTANT: Add duration and speed for accurate preview generation
-        if (clipData.duration !== undefined) {
-            requestData.clip_data.duration = clipData.duration;
-        }
+        // IMPORTANT: Add speed for accurate preview generation
         if (clipData.speed !== undefined) {
             requestData.clip_data.speed = clipData.speed;
         }
