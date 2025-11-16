@@ -51,7 +51,7 @@ def generate_timeline_preview(
     try:
         # Create output directory if needed
         if output_dir is None:
-            output_dir = Path(tempfile.gettempdir()) / "timeline_previews"
+            output_dir = Path.home() / ".shots_dashboard" / "preview_cache"
 
         # Ensure output directory exists
         output_dir.mkdir(parents=True, exist_ok=True)
