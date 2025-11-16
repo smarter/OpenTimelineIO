@@ -82,16 +82,19 @@ class ShotsDashboard {
         }
 
         container.innerHTML = files.map(file => {
-            const date = new Date(file.last_updated);
-            // Format with explicit locale-aware options
-            const exactDateTime = date.toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
+            let exactDateTime = 'unknown';
+            if (file.last_updated) {
+                const date = new Date(file.last_updated);
+                // Format with explicit locale-aware options
+                exactDateTime = date.toLocaleString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
             return `
             <div class="file-item">
                 <div class="file-name" data-filename="${this.escapeHtml(file.name)}" title="${this.escapeHtml(file.path)}">${this.escapeHtml(file.name)}</div>
@@ -170,6 +173,11 @@ class ShotsDashboard {
     }
 
     formatTime(isoString) {
+        // Handle null/undefined timestamps
+        if (!isoString) {
+            return 'unknown';
+        }
+
         const date = new Date(isoString);
         const now = new Date();
         const diff = now - date;

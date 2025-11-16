@@ -44,7 +44,7 @@ class FileRecord:
     """
     path: Path
     state: FileState
-    last_updated: datetime
+    last_updated: datetime | None
 
     def with_state(self, new_state: FileState) -> FileRecord:
         """Create a new FileRecord with updated state and current file mtime."""
@@ -53,8 +53,8 @@ class FileRecord:
         try:
             file_mtime = datetime.fromtimestamp(self.path.stat().st_mtime)
         except (OSError, FileNotFoundError):
-            # If file doesn't exist or can't be accessed, use current time
-            file_mtime = datetime.now()
+            # If file doesn't exist or can't be accessed, mark as unknown
+            file_mtime = None
 
         return FileRecord(
             path=self.path,
