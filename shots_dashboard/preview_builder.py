@@ -48,6 +48,8 @@ class TimelineClip(NamedTuple):
     # Track info
     track_kind: str  # 'Video' or 'Audio'
     track_index: int  # Which track (0-indexed)
+    # Audio properties
+    audio_gain_db: float = 0.0  # Audio gain in decibels (default: 0 = no change)
 
 
 # ============================================================================
@@ -140,7 +142,8 @@ def build_clip_preview_with_audio(
             source_start=audio_source_start,
             source_duration=audio_source_duration,
             offset=output_offset,
-            track_index=0  # Assume first audio track for now
+            track_index=0,  # Assume first audio track for now
+            volume_db=clip.audio_gain_db
         )
         audio_streams.append(audio_stream)
 

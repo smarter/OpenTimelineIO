@@ -280,7 +280,12 @@ def create_app(
                                     if source_duration is not None and duration_seconds_clip > 0:
                                         speed = source_duration / duration_seconds_clip
 
-                                    clips_data.append({
+                                    # Extract audio gain from metadata if present
+                                    audio_gain_db = None
+                                    if hasattr(item, 'metadata') and 'prproj' in item.metadata:
+                                        audio_gain_db = item.metadata['prproj'].get('audio_gain_db')
+
+                                    clip_data = {
                                         "name": item.name or "Unnamed Clip",
                                         "start": start_seconds,
                                         "duration": duration_seconds_clip,
@@ -290,7 +295,13 @@ def create_app(
                                         "source_duration": source_duration,
                                         "speed": speed,
                                         "fps": float(duration_clip.rate)
-                                    })
+                                    }
+
+                                    # Add audio gain if present
+                                    if audio_gain_db is not None:
+                                        clip_data["audio_gain_db"] = audio_gain_db
+
+                                    clips_data.append(clip_data)
 
                             # Merge adjacent clips with the same name (preserving segment info)
                             merged_clips = []

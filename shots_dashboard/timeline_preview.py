@@ -303,6 +303,9 @@ def _build_timeline_clips(
 
             logger.info(f"  Audio clip '{clip_name}': timeline {clip_timeline_start:.2f}-{clip_timeline_end:.2f}s (duration: {clip_timeline_duration:.2f}s)")
 
+            # Get audio gain from clip info if present
+            audio_gain_db = clip_info.get('audio_gain_db', 0.0)
+
             clip = TimelineClip(
                 name=clip_name,
                 source_path=clip_path,
@@ -311,7 +314,8 @@ def _build_timeline_clips(
                 source_start=clip_info.get('source_start', 0.0),
                 source_duration=clip_info.get('source_duration', clip_info['duration']),
                 track_kind='Audio',
-                track_index=int(track.get('name', 'Track 0').split()[-1]) if 'name' in track else 0
+                track_index=int(track.get('name', 'Track 0').split()[-1]) if 'name' in track else 0,
+                audio_gain_db=audio_gain_db
             )
             all_clips.append(clip)
 

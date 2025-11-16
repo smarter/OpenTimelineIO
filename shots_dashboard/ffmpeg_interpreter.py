@@ -84,21 +84,21 @@ def to_ffmpeg_command(output: Output) -> list[str]:
         cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
 
     elif isinstance(comp.audio, AudioStream):
-        # Single audio stream - check if it needs delay/offset
-        if comp.audio.offset > 0:
-            # Need to apply delay using filter_complex
-            filter_complex = _build_single_audio_delay_filter(comp.audio)
+        # Single audio stream - check if it needs delay/offset or volume
+        if comp.audio.offset > 0 or comp.audio.volume_db != 0.0:
+            # Need to apply filters using filter_complex
+            filter_complex = _build_single_audio_filter(comp.audio)
             cmd.extend(['-filter_complex', filter_complex])
             cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
         else:
-            # No offset, just map directly
+            # No offset or volume adjustment, just map directly
             cmd.extend(['-map', f'{video_input_index}:v', '-map', '1:a'])
 
     elif isinstance(comp.audio, AudioMix) and len(comp.audio.streams) == 1:
         # AudioMix with single stream - treat as single stream
         stream = comp.audio.streams[0]
-        if stream.offset > 0:
-            filter_complex = _build_single_audio_delay_filter(stream)
+        if stream.offset > 0 or stream.volume_db != 0.0:
+            filter_complex = _build_single_audio_filter(stream)
             cmd.extend(['-filter_complex', filter_complex])
             cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
         else:
@@ -129,18 +129,34 @@ def to_ffmpeg_command(output: Output) -> list[str]:
     return cmd
 
 
-def _build_single_audio_delay_filter(audio_stream: AudioStream) -> str:
+def _build_single_audio_filter(audio_stream: AudioStream) -> str:
     """
-    Build a filter_complex string for a single audio stream with delay.
+    Build a filter_complex string for a single audio stream.
+
+    Applies volume adjustment and/or delay as needed.
 
     Args:
-        audio_stream: The AudioStream with offset > 0
+        audio_stream: The AudioStream to process
 
     Returns:
         filter_complex string for ffmpeg
     """
-    delay_ms = int(audio_stream.offset * 1000)
-    return f"[1:a]adelay={delay_ms}:all=1,aformat=sample_fmts=fltp[aout]"
+    filters = []
+
+    # Apply volume adjustment if needed
+    if audio_stream.volume_db != 0.0:
+        filters.append(f"volume={audio_stream.volume_db}dB")
+
+    # Apply delay if needed
+    if audio_stream.offset > 0:
+        delay_ms = int(audio_stream.offset * 1000)
+        filters.append(f"adelay={delay_ms}:all=1")
+
+    # Normalize format
+    filters.append("aformat=sample_fmts=fltp")
+
+    filter_chain = ','.join(filters)
+    return f"[1:a]{filter_chain}[aout]"
 
 
 def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
@@ -163,27 +179,34 @@ def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
     for i, stream in enumerate(audio_mix.streams):
         input_idx = i + 1  # Input 0 is video, audio starts at 1
 
+        # Build filter chain for this stream
+        filters = []
+
+        # 1. Apply volume adjustment if needed
+        if stream.volume_db != 0.0:
+            filters.append(f"volume={stream.volume_db}dB")
+
+        # 2. Apply delay if needed
         if stream.offset > 0:
             # Add silence padding at the beginning
             # adelay uses milliseconds, all=1 applies to all channels
             delay_ms = int(stream.offset * 1000)
-            filter_parts.append(
-                f"[{input_idx}:a]adelay={delay_ms}:all=1,aformat=sample_fmts=fltp[a{i}]"
-            )
-        else:
-            # No offset needed, just normalize format
-            filter_parts.append(
-                f"[{input_idx}:a]aformat=sample_fmts=fltp[a{i}]"
-            )
+            filters.append(f"adelay={delay_ms}:all=1")
+
+        # 3. Normalize audio format
+        filters.append("aformat=sample_fmts=fltp")
+
+        # Combine filters for this stream
+        filter_chain = ','.join(filters)
+        filter_parts.append(f"[{input_idx}:a]{filter_chain}[a{i}]")
 
     # Mix all processed streams
+    # Use simple defaults: no artificial transitions, play until all streams end
     mix_inputs = ''.join(f'[a{i}]' for i in range(len(audio_mix.streams)))
     num_inputs = len(audio_mix.streams)
 
     filter_parts.append(
-        f"{mix_inputs}amix=inputs={num_inputs}:"
-        f"duration={audio_mix.duration_mode}:"
-        f"dropout_transition={audio_mix.dropout_transition}[aout]"
+        f"{mix_inputs}amix=inputs={num_inputs}:duration=longest:dropout_transition=0[aout]"
     )
 
     return ';'.join(filter_parts)

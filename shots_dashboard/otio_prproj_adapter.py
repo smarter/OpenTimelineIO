@@ -354,6 +354,21 @@ class PremiereProjParser:
                     # Get PlaybackSpeed (time remap)
                     playback_speed = self._get_float(clip_elem, './/PlaybackSpeed', 1.0)
 
+        # Extract audio gain if this is an AudioClipTrackItem
+        audio_gain_db = None
+        if track_item_elem.tag == 'AudioClipTrackItem':
+            # For audio clips, clip_elem is actually an AudioClip
+            # which may have a Gain element
+            if clip_ref is not None:
+                clip_id = clip_ref.get('ObjectRef')
+                if clip_id:
+                    clip_elem = self._resolve_ref(clip_id)
+                    if clip_elem is not None and clip_elem.tag == 'AudioClip':
+                        # Gain is stored as a direct child of AudioClip
+                        # Default is 0 dB if not present
+                        audio_gain_db = self._get_float(clip_elem, 'Gain', 0.0)
+                        logger.debug(f"Audio clip gain: {audio_gain_db} dB")
+
         # Get clip name and media reference
         name = self._parse_clip_name(subclip)
         media_ref = self._parse_media_reference(subclip)
@@ -373,6 +388,12 @@ class PremiereProjParser:
             source_range=source_range,
             media_reference=media_ref
         )
+
+        # Store audio gain in metadata if present
+        if audio_gain_db is not None:
+            if META_NAMESPACE not in clip.metadata:
+                clip.metadata[META_NAMESPACE] = {}
+            clip.metadata[META_NAMESPACE]['audio_gain_db'] = audio_gain_db
 
         # Add LinearTimeWarp effect if playback speed is not 1.0
         if playback_speed != 1.0:
