@@ -959,12 +959,25 @@ class ShotsDashboard {
             clip_data: {}
         };
 
+        // Add timeline position (for overlap detection with other clips)
+        if (clipData.start !== undefined) {
+            requestData.clip_data.start = clipData.start;
+        }
+        if (clipData.duration !== undefined) {
+            requestData.clip_data.duration = clipData.duration;
+        }
+
         // Add source range or segments
         if (clipData.segments) {
             requestData.clip_data.segments = clipData.segments;
         } else if (clipData.source_start !== undefined && clipData.source_end !== undefined) {
             requestData.clip_data.source_start = clipData.source_start;
             requestData.clip_data.source_end = clipData.source_end;
+        }
+
+        // Include timeline data for audio mixing
+        if (this.currentTimeline) {
+            requestData.timeline_data = this.currentTimeline;
         }
 
         const response = await fetch('/api/preview/clip', {
