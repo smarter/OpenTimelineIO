@@ -116,7 +116,7 @@ def generate_timeline_preview(
         cmd = to_ffmpeg_command(output)
 
         logger.info(f"Generating timeline preview: {output_path.name}")
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+        logger.info(f"FFmpeg command: {' '.join(cmd)}")
 
         # Execute ffmpeg
         result = subprocess.run(
@@ -192,7 +192,7 @@ def _generate_simple_preview(
     cmd = to_ffmpeg_command(output)
 
     logger.info(f"Generating simple preview (no audio): {output_path.name}")
-    logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+    logger.info(f"FFmpeg command: {' '.join(cmd)}")
 
     result = subprocess.run(
         cmd,

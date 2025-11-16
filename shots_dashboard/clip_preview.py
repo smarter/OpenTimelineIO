@@ -299,7 +299,7 @@ class ClipPreviewGenerator:
 
         cmd.append(str(output_path))
 
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+        logger.info(f"FFmpeg command: {' '.join(cmd)}")
 
         subprocess.run(
             cmd,
@@ -445,8 +445,8 @@ class ClipPreviewGenerator:
 
         cmd.append(str(output_path))
 
-        logger.debug(f"FFmpeg filter_complex: {filter_complex}")
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+        logger.info(f"FFmpeg filter_complex: {filter_complex}")
+        logger.info(f"FFmpeg command: {' '.join(cmd)}")
 
         subprocess.run(
             cmd,
