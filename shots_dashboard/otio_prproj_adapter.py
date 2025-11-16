@@ -423,14 +423,36 @@ class PremiereProjParser:
         # Find track items - they are referenced by ObjectRef
         track_items_elem = track_elem.find('.//ClipItems/TrackItems')
         if track_items_elem is not None:
+            # Track the current timeline position to handle gaps
+            current_position_ticks = 0
+            ticks_per_second = 254016000000  # Premiere's tick rate
+
             for item_ref in track_items_elem.findall('.//TrackItem'):
                 item_id = item_ref.get('ObjectRef')
                 if item_id:
                     item_elem = self._resolve_ref(item_id)
                     if item_elem is not None:
-                        clip = self._parse_clip(item_elem, rate)
-                        if clip:
-                            track.append(clip)
+                        # Get start/end times from the track item
+                        track_item = item_elem.find('.//TrackItem')
+                        if track_item is not None:
+                            start_ticks = self._get_int(track_item, 'Start', 0)
+                            end_ticks = self._get_int(track_item, 'End', 0)
+
+                            # If there's a gap before this clip, insert a Gap
+                            if start_ticks > current_position_ticks:
+                                gap_duration_ticks = start_ticks - current_position_ticks
+                                gap_duration = self._parse_rational_time(gap_duration_ticks, rate)
+                                track.append(otio.schema.Gap(
+                                    source_range=otio.opentime.TimeRange(
+                                        start_time=otio.opentime.RationalTime(0, rate),
+                                        duration=gap_duration
+                                    )
+                                ))
+
+                            clip = self._parse_clip(item_elem, rate)
+                            if clip:
+                                track.append(clip)
+                                current_position_ticks = end_ticks
 
         return track
 

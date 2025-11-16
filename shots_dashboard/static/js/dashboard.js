@@ -18,6 +18,14 @@ class ShotsDashboard {
         document.getElementById('show-historical-toggle').addEventListener('change', (e) => {
             this.toggleHistoricalTimeline(e.target.checked);
         });
+
+        // Sequence selector
+        document.getElementById('sequence-dropdown').addEventListener('change', (e) => {
+            const sequenceIndex = parseInt(e.target.value);
+            if (sequenceIndex >= 0) {
+                this.loadSequence(sequenceIndex);
+            }
+        });
     }
 
     async loadData() {
@@ -417,6 +425,15 @@ class ShotsDashboard {
             });
         });
 
+        // Handle sequence loaded event
+        this.socket.on('sequence_loaded', (data) => {
+            console.log('Sequence loaded:', data);
+            if (data.timeline_visual) {
+                this.renderVisualTimeline(data.timeline_visual);
+            }
+            this.showStatus('Sequence loaded', 'success');
+        });
+
         // Handle errors
         this.socket.on('error', (data) => {
             console.error('WebSocket error:', data);
@@ -441,7 +458,44 @@ class ShotsDashboard {
             this.renderVisualTimeline(null);
         }
 
+        // Update sequence selector if available
+        if (data.available_sequences) {
+            this.updateSequenceSelector(data.available_sequences);
+        }
+
         this.showStatus('Ready', 'success');
+    }
+
+    updateSequenceSelector(sequences) {
+        const selector = document.getElementById('sequence-selector');
+        const dropdown = document.getElementById('sequence-dropdown');
+
+        if (!sequences || sequences.length <= 1) {
+            // Hide selector if only one sequence
+            selector.style.display = 'none';
+            return;
+        }
+
+        // Show selector and populate options
+        selector.style.display = 'block';
+        dropdown.innerHTML = '';
+
+        sequences.forEach(seq => {
+            const option = document.createElement('option');
+            option.value = seq.index;
+            option.textContent = seq.name;
+            dropdown.appendChild(option);
+        });
+
+        // Select the last sequence by default (most recent)
+        dropdown.value = sequences[sequences.length - 1].index;
+    }
+
+    loadSequence(sequenceIndex) {
+        console.log(`Loading sequence index: ${sequenceIndex}`);
+        if (this.socket) {
+            this.socket.emit('load_sequence', { sequence_index: sequenceIndex });
+        }
     }
 
     setupVideoPreview() {

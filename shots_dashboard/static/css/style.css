@@ -273,6 +273,47 @@ body {
     font-weight: normal;
 }
 
+/* Timeline Controls */
+.timeline-controls {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.sequence-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sequence-selector label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.sequence-dropdown {
+    padding: 0.4rem 0.8rem;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-width: 200px;
+    transition: border-color 0.2s;
+}
+
+.sequence-dropdown:hover {
+    border-color: var(--primary);
+}
+
+.sequence-dropdown:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
 /* Toggle Switch */
 .toggle-switch {
     display: flex;

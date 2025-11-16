@@ -229,6 +229,7 @@ def create_app(
 
             # Get visual timeline data
             timeline_visual = None
+            available_sequences = None
             if tracker.state.timeline_path and tracker.state.timeline_path.exists():
                 try:
                     import opentimelineio as otio
@@ -236,13 +237,22 @@ def create_app(
                     # Check if it's a .prproj file and use our custom adapter
                     if tracker.state.timeline_path.suffix.lower() == '.prproj':
                         import otio_prproj_adapter
-                        timeline = otio_prproj_adapter.read_from_file(str(tracker.state.timeline_path))
-                        # If multiple sequences, use the last one (most recent version)
-                        if not isinstance(timeline, otio.schema.Timeline):
-                            sequences = list(timeline)
+                        timeline_data = otio_prproj_adapter.read_from_file(str(tracker.state.timeline_path))
+                        # If multiple sequences, extract list and use the last one by default
+                        if not isinstance(timeline_data, otio.schema.Timeline):
+                            sequences = list(timeline_data)
+                            # Build list of available sequences
+                            available_sequences = [
+                                {"index": i, "name": seq.name}
+                                for i, seq in enumerate(sequences)
+                            ]
                             timeline = sequences[-1] if len(sequences) > 0 else None
+                        else:
+                            timeline = timeline_data
+                            available_sequences = [{"index": 0, "name": timeline.name}]
                     else:
                         timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
+                        available_sequences = [{"index": 0, "name": timeline.name if hasattr(timeline, 'name') else 'Timeline'}]
 
                     if isinstance(timeline, otio.schema.Timeline):
                         duration = timeline.duration()
@@ -367,6 +377,7 @@ def create_app(
                 "files": files,
                 "timeline_history": timeline_history,
                 "timeline_visual": timeline_visual,
+                "available_sequences": available_sequences,
                 "timeline_path": str(tracker.state.timeline_path) if tracker.state.timeline_path else None,
                 "last_scan": tracker.state.last_scan.isoformat() if tracker.state.last_scan else None,
                 "timestamp": datetime.now().isoformat()
@@ -378,6 +389,146 @@ def create_app(
     def index() -> str:
         """Render main dashboard."""
         return render_template('index.html')
+
+    @socketio.on('load_sequence')
+    def handle_load_sequence(data: dict) -> None:
+        """Load a specific sequence by index."""
+        try:
+            sequence_index = data.get('sequence_index', -1)
+            tracker = get_tracker()
+
+            if not tracker.state.timeline_path or not tracker.state.timeline_path.exists():
+                socketio.emit('error', {"message": "No timeline file loaded"})
+                return
+
+            import opentimelineio as otio
+
+            # Check if it's a .prproj file
+            if tracker.state.timeline_path.suffix.lower() == '.prproj':
+                import otio_prproj_adapter
+                timeline_data = otio_prproj_adapter.read_from_file(str(tracker.state.timeline_path))
+
+                if not isinstance(timeline_data, otio.schema.Timeline):
+                    sequences = list(timeline_data)
+                    if 0 <= sequence_index < len(sequences):
+                        timeline = sequences[sequence_index]
+                    else:
+                        socketio.emit('error', {"message": f"Invalid sequence index: {sequence_index}"})
+                        return
+                else:
+                    timeline = timeline_data
+            else:
+                timeline = otio.adapters.read_from_file(str(tracker.state.timeline_path))
+
+            # Build timeline visual data (same as in emit_update)
+            if isinstance(timeline, otio.schema.Timeline):
+                duration = timeline.duration()
+                duration_seconds = float(duration.value) / float(duration.rate)
+
+                tracks_data = []
+                for track_idx, track in enumerate(timeline.tracks):
+                    clips_data = []
+
+                    for item_idx, item in enumerate(track):
+                        if isinstance(item, otio.schema.Clip):
+                            range_in_parent = track.range_of_child_at_index(item_idx)
+                            start_time = range_in_parent.start_time
+                            duration_clip = range_in_parent.duration
+
+                            start_seconds = float(start_time.value) / float(start_time.rate)
+                            duration_seconds_clip = float(duration_clip.value) / float(duration_clip.rate)
+
+                            source_start, source_end, source_duration = get_actual_source_duration(item)
+
+                            speed = None
+                            if source_duration is not None and duration_seconds_clip > 0:
+                                speed = source_duration / duration_seconds_clip
+
+                            clips_data.append({
+                                "name": item.name or "Unnamed Clip",
+                                "start": start_seconds,
+                                "duration": duration_seconds_clip,
+                                "end": start_seconds + duration_seconds_clip,
+                                "source_start": source_start,
+                                "source_end": source_end,
+                                "source_duration": source_duration,
+                                "speed": speed
+                            })
+
+                    # Merge adjacent clips (same logic as emit_update)
+                    merged_clips = []
+                    for clip in clips_data:
+                        if merged_clips and \
+                           merged_clips[-1]["name"] == clip["name"] and \
+                           abs(merged_clips[-1]["end"] - clip["start"]) < 0.01:
+                            merged_clips[-1]["end"] = clip["end"]
+                            merged_clips[-1]["duration"] = merged_clips[-1]["end"] - merged_clips[-1]["start"]
+                            if "segments" not in merged_clips[-1]:
+                                first_timeline_end = merged_clips[-1]["segments_end"] if "segments_end" in merged_clips[-1] else clip["start"]
+                                first_timeline_duration = first_timeline_end - merged_clips[-1]["start"]
+                                first_source_duration = merged_clips[-1]["source_end"] - merged_clips[-1]["source_start"] if merged_clips[-1]["source_end"] and merged_clips[-1]["source_start"] else None
+                                first_speed = merged_clips[-1].get("speed")
+
+                                merged_clips[-1]["segments"] = [{
+                                    "timeline_start": merged_clips[-1]["start"],
+                                    "timeline_end": first_timeline_end,
+                                    "timeline_duration": first_timeline_duration,
+                                    "source_start": merged_clips[-1]["source_start"],
+                                    "source_end": merged_clips[-1]["source_end"],
+                                    "source_duration": first_source_duration,
+                                    "speed": first_speed
+                                }]
+
+                            segment_timeline_duration = clip["end"] - clip["start"]
+                            segment_source_duration = clip.get("source_duration")
+                            segment_speed = clip.get("speed")
+
+                            merged_clips[-1]["segments"].append({
+                                "timeline_start": clip["start"],
+                                "timeline_end": clip["end"],
+                                "timeline_duration": segment_timeline_duration,
+                                "source_start": clip["source_start"],
+                                "source_end": clip["source_end"],
+                                "source_duration": segment_source_duration,
+                                "speed": segment_speed
+                            })
+                            merged_clips[-1]["segments_end"] = clip["end"]
+                        else:
+                            merged_clips.append(clip.copy())
+
+                    for clip in merged_clips:
+                        clip.pop("segments_end", None)
+
+                    clips_data = merged_clips
+
+                    if clips_data:
+                        track_kind = "Video"
+                        if track.kind:
+                            if hasattr(track.kind, 'name'):
+                                track_kind = track.kind.name
+                            else:
+                                track_kind = str(track.kind)
+
+                        tracks_data.append({
+                            "name": track.name or f"Track {track_idx + 1}",
+                            "kind": track_kind,
+                            "clips": clips_data
+                        })
+
+                timeline_visual = {
+                    "name": tracker.state.timeline_path.name,
+                    "sequence_name": timeline.name if timeline and hasattr(timeline, 'name') else None,
+                    "duration": duration_seconds,
+                    "tracks": tracks_data
+                }
+
+                socketio.emit('sequence_loaded', {
+                    "timeline_visual": timeline_visual,
+                    "sequence_index": sequence_index
+                })
+        except Exception as e:
+            logger.error(f"Error loading sequence: {e}", exc_info=True)
+            socketio.emit('error', {"message": f"Error loading sequence: {str(e)}"})
 
     @app.route('/api/preview/<path:filename>')
     def api_preview(filename: str) -> Response | tuple[Any, int]:

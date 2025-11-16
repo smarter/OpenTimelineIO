@@ -19,11 +19,19 @@
         <div class="timeline-widget" id="timeline-widget">
             <div class="timeline-widget-header">
                 <h3>📽️ Timeline Visualization</h3>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="show-historical-toggle">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label">Show Clip List</span>
-                </label>
+                <div class="timeline-controls">
+                    <div class="sequence-selector" id="sequence-selector" style="display: none;">
+                        <label for="sequence-dropdown">Sequence:</label>
+                        <select id="sequence-dropdown" class="sequence-dropdown">
+                            <option value="-1">Loading...</option>
+                        </select>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="show-historical-toggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Show Clip List</span>
+                    </label>
+                </div>
             </div>
 
             <div class="timeline-visual-container" id="timeline-visual-container">
