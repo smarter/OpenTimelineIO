@@ -29,7 +29,8 @@ def generate_timeline_preview(
     video_clip_data: dict[str, Any],
     video_clip_path: Path,
     timeline_data: dict[str, Any] | None,
-    output_dir: Path | None = None
+    output_dir: Path | None = None,
+    file_resolver: dict[str, Path] | None = None
 ) -> Path:
     """
     Generate a preview for a video clip with audio from overlapping timeline tracks.
@@ -39,6 +40,7 @@ def generate_timeline_preview(
         video_clip_path: Path to the video file
         timeline_data: Timeline visual data including all tracks and clips
         output_dir: Directory for output file (defaults to temp)
+        file_resolver: Dict mapping filenames to full paths (from tracker)
 
     Returns:
         Path to generated preview file
@@ -86,7 +88,8 @@ def generate_timeline_preview(
             video_clip, all_clips = _build_timeline_clips(
                 video_clip_data,
                 video_clip_path,
-                timeline_data
+                timeline_data,
+                file_resolver
             )
         except Exception as e:
             logger.warning(f"Failed to build timeline clips: {e}, falling back to simple preview")
@@ -212,7 +215,8 @@ def _generate_simple_preview(
 def _build_timeline_clips(
     video_clip_data: dict[str, Any],
     video_clip_path: Path,
-    timeline_data: dict[str, Any]
+    timeline_data: dict[str, Any],
+    file_resolver: dict[str, Path] | None = None
 ) -> tuple[TimelineClip, list[TimelineClip]]:
     """
     Build TimelineClip objects from frontend data.
@@ -221,6 +225,7 @@ def _build_timeline_clips(
         video_clip_data: The video clip being previewed
         video_clip_path: Path to video file
         timeline_data: Full timeline data with all tracks
+        file_resolver: Dict mapping filenames to full paths
 
     Returns:
         Tuple of (video_clip, all_clips)
@@ -271,9 +276,18 @@ def _build_timeline_clips(
 
             # Get source path - need to resolve the clip name to a full path
             clip_name = clip_info['name']
-            # TODO: Resolve clip name to full path using tracker
-            # For now, assume clip_name is the filename
-            clip_path = video_clip_path.parent / clip_name
+
+            # Resolve clip path using file_resolver if available
+            if file_resolver and clip_name in file_resolver:
+                clip_path = file_resolver[clip_name]
+            else:
+                # Fallback: assume clip is in same directory as video
+                clip_path = video_clip_path.parent / clip_name
+
+            # Skip if resolved path doesn't exist
+            if not clip_path.exists():
+                logger.warning(f"Skipping audio clip {clip_name}: file not found at {clip_path}")
+                continue
 
             clip = TimelineClip(
                 name=clip_name,

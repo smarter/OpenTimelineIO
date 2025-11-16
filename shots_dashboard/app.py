@@ -774,6 +774,11 @@ def create_app(
             # Generate preview with timeline audio if data is available
             logger.info(f"Generating preview for {source_path.name}")
 
+            # Build file resolver from tracker for proper path resolution
+            file_resolver = {}
+            for file_path in tracker.state.files.keys():
+                file_resolver[file_path.name] = file_path
+
             try:
                 # Always use timeline preview (strips audio when timeline_data is None)
                 if timeline_data:
@@ -784,7 +789,8 @@ def create_app(
                 preview_path = generate_timeline_preview(
                     clip_data,
                     source_path,
-                    timeline_data
+                    timeline_data,
+                    file_resolver=file_resolver
                 )
             except (PreviewGenerationError, TimelinePreviewError) as e:
                 logger.error(f"Preview generation failed: {e}")
