@@ -91,11 +91,11 @@ class TimelineWatcher:
         self.handler = FileWatcherHandler(callback, {'.otio', '.xml', '.prproj'})
 
     def start(self) -> None:
-        """Start watching the directory."""
+        """Start watching the directory recursively."""
         self.watch_dir.mkdir(parents=True, exist_ok=True)
-        self.observer.schedule(self.handler, str(self.watch_dir), recursive=False)
+        self.observer.schedule(self.handler, str(self.watch_dir), recursive=True)
         self.observer.start()
-        logger.info(f"📁 Watching for timeline files in: {self.watch_dir}")
+        logger.info(f"📁 Watching for timeline files in: {self.watch_dir} (recursive)")
 
     def stop(self) -> None:
         """Stop watching the directory."""
