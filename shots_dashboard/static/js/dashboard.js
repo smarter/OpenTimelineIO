@@ -81,12 +81,16 @@ class ShotsDashboard {
             return;
         }
 
-        container.innerHTML = files.map(file => `
+        container.innerHTML = files.map(file => {
+            const date = new Date(file.last_updated);
+            const exactDateTime = date.toLocaleString();
+            return `
             <div class="file-item">
                 <div class="file-name" data-filename="${this.escapeHtml(file.name)}" title="${this.escapeHtml(file.path)}">${this.escapeHtml(file.name)}</div>
-                <div class="file-time">${this.formatTime(file.last_updated)}</div>
+                <div class="file-time" title="${exactDateTime}">${this.formatTime(file.last_updated)}</div>
             </div>
-        `).join('');
+            `;
+        }).join('');
 
         // Attach preview handlers to file names
         container.querySelectorAll('.file-name').forEach(el => {
