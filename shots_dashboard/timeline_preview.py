@@ -143,11 +143,58 @@ def _generate_simple_preview(
     source_path: Path,
     output_path: Path
 ) -> Path:
-    """Generate a simple preview without timeline audio mixing"""
-    from clip_preview import ClipPreviewGenerator
+    """
+    Generate a simple preview without audio.
 
-    generator = ClipPreviewGenerator()
-    return generator.generate_preview(clip_data, source_path)
+    When there's no timeline context, we strip audio since we don't know
+    what audio should be included.
+    """
+    from media_algebra import VideoStream, AVComposition, Output, MediaFile, TimeRange
+    from ffmpeg_interpreter import to_ffmpeg_command
+
+    # Extract clip timing info
+    source_start = clip_data.get('source_start', 0.0)
+    source_duration = clip_data.get('source_duration')
+
+    if source_duration is None:
+        source_end = clip_data.get('source_end')
+        if source_end is not None:
+            source_duration = source_end - source_start
+        else:
+            source_duration = clip_data.get('duration', 10.0)
+
+    # Create video stream (no audio)
+    video_stream = VideoStream(
+        media=MediaFile(source_path),
+        source_range=TimeRange(source_start, source_duration)
+    )
+
+    # Create composition with no audio
+    composition = AVComposition(video=video_stream, audio=None)
+
+    # Create output specification
+    output = Output(
+        composition=composition,
+        output_path=output_path,
+        preset='veryfast'
+    )
+
+    # Convert to ffmpeg command and execute
+    cmd = to_ffmpeg_command(output)
+
+    logger.info(f"Generating simple preview (no audio): {output_path.name}")
+    logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+    if result.returncode != 0:
+        logger.error(f"FFmpeg failed: {result.stderr}")
+        raise TimelinePreviewError(f"FFmpeg error: {result.stderr[:200]}")
+
+    if not output_path.exists():
+        raise TimelinePreviewError("Preview file was not created")
+
+    return output_path
 
 
 def _build_timeline_clips(
