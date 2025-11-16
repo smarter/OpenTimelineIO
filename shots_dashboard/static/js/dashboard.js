@@ -6,6 +6,7 @@ class ShotsDashboard {
         this.previewTimeout = null;
         this.currentPreviewFilename = null;
         this.autoplayEnabled = localStorage.getItem('audioAutoplayEnabled') === 'true';
+        this.currentTimeline = null;  // Store current timeline data for preview generation
         this.setupEventListeners();
         this.setupVideoPreview();
         this.setupAutoplayPermission();
@@ -277,6 +278,9 @@ class ShotsDashboard {
 
     renderVisualTimeline(timelineData) {
         const container = document.getElementById('timeline-visual-canvas');
+
+        // Store timeline data for preview generation with audio
+        this.currentTimeline = timelineData;
 
         if (!timelineData || !timelineData.tracks || timelineData.tracks.length === 0) {
             container.innerHTML = '<p class="empty-state">No timeline loaded yet</p>';
@@ -896,6 +900,11 @@ class ShotsDashboard {
     async generateAndCacheClipPreview(filename, requestData, cacheKey) {
         try {
             console.log('Generating clip preview for:', filename);
+
+            // Include timeline data for audio mixing
+            if (this.currentTimeline) {
+                requestData.timeline_data = this.currentTimeline;
+            }
 
             const response = await fetch('/api/preview/clip', {
                 method: 'POST',

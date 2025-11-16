@@ -693,7 +693,7 @@ def create_app(
     @app.route('/api/preview/clip', methods=['POST'])
     def api_clip_preview() -> Response | tuple[Any, int]:
         """
-        Generate clip-accurate preview for a timeline clip.
+        Generate clip-accurate preview for a timeline clip with audio mixing.
 
         Expects JSON body with:
         {
@@ -701,11 +701,13 @@ def create_app(
             "clip_data": {
                 "source_start": 5.0,
                 "source_end": 10.0,
-                OR
-                "segments": [
-                    {"source_start": 0.0, "source_end": 2.0},
-                    {"source_start": 4.0, "source_end": 6.0}
-                ]
+                "duration": 5.0,
+                "timeline_start": 0.0,  // Optional: for timeline audio
+                ...
+            },
+            "timeline_data": {  // Optional: enables audio mixing
+                "tracks": [...],
+                ...
             }
         }
 
@@ -713,6 +715,7 @@ def create_app(
         """
         try:
             from clip_preview import ClipPreviewGenerator, PreviewGenerationError
+            from timeline_preview import generate_timeline_preview, TimelinePreviewError
 
             data = request.get_json()
             if not data or 'path' not in data or 'clip_data' not in data:
@@ -723,16 +726,13 @@ def create_app(
 
             filename = data['path']
             clip_data = data['clip_data']
+            timeline_data = data.get('timeline_data')
 
-            # Debug logging to see what frontend is sending
+            # Debug logging
             logger.info(f"Clip preview request for: {filename}")
-            logger.info(f"Clip data received: {clip_data}")
-            logger.info(f"  - Has duration: {'duration' in clip_data}")
-            logger.info(f"  - Has speed: {'speed' in clip_data}")
-            if 'duration' in clip_data:
-                logger.info(f"  - Duration value: {clip_data['duration']}")
-            if 'speed' in clip_data:
-                logger.info(f"  - Speed value: {clip_data['speed']}")
+            logger.info(f"  - Has timeline data: {timeline_data is not None}")
+            if timeline_data:
+                logger.info(f"  - Timeline tracks: {len(timeline_data.get('tracks', []))}")
 
             # Resolve filename to full path using tracker's file list
             tracker = get_tracker()
@@ -771,17 +771,28 @@ def create_app(
                     "error": f"Source file not found: {source_path}"
                 }), 404
 
-            # Generate preview
-            logger.info(f"Generating clip preview for {source_path.name}")
-            generator = ClipPreviewGenerator()
+            # Generate preview with timeline audio if data is available
+            logger.info(f"Generating preview for {source_path.name}")
 
             try:
-                preview_path = generator.generate_preview(
-                    clip_data,
-                    source_path,
-                    timeout=300
-                )
-            except PreviewGenerationError as e:
+                if timeline_data:
+                    # Use timeline-aware preview with audio mixing
+                    logger.info("Generating timeline preview with audio mixing")
+                    preview_path = generate_timeline_preview(
+                        clip_data,
+                        source_path,
+                        timeline_data
+                    )
+                else:
+                    # Fallback to simple clip preview
+                    logger.info("Generating simple clip preview")
+                    generator = ClipPreviewGenerator()
+                    preview_path = generator.generate_preview(
+                        clip_data,
+                        source_path,
+                        timeout=300
+                    )
+            except (PreviewGenerationError, TimelinePreviewError) as e:
                 logger.error(f"Preview generation failed: {e}")
                 return jsonify({
                     "success": False,
