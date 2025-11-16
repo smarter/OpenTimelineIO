@@ -47,11 +47,19 @@ class FileRecord:
     last_updated: datetime
 
     def with_state(self, new_state: FileState) -> FileRecord:
-        """Create a new FileRecord with updated state, preserving original timestamp."""
+        """Create a new FileRecord with updated state and current file mtime."""
+        from datetime import datetime
+        # Update timestamp to current file modification time
+        try:
+            file_mtime = datetime.fromtimestamp(self.path.stat().st_mtime)
+        except (OSError, FileNotFoundError):
+            # If file doesn't exist or can't be accessed, use current time
+            file_mtime = datetime.now()
+
         return FileRecord(
             path=self.path,
             state=new_state,
-            last_updated=self.last_updated  # Preserve original file modification time
+            last_updated=file_mtime
         )
 
     def is_audio(self) -> bool:

@@ -151,7 +151,7 @@ class TimelineTracker:
                 ):
                     initial_state = FileState.REMOVED
 
-                # Use file's actual modification time instead of current time
+                # Use file's modification time
                 file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
                 record = FileRecord(
                     path=file_path,
