@@ -6,6 +6,7 @@ calculating overlaps and time mappings.
 """
 
 from __future__ import annotations
+import logging
 from pathlib import Path
 from typing import NamedTuple
 
@@ -21,6 +22,9 @@ from media_algebra import (
     build_audio_stream,
     mix_audio_streams,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -95,6 +99,8 @@ def build_clip_preview_with_audio(
     # 2. Find overlapping audio clips and build audio streams
     audio_streams: list[AudioStream] = []
 
+    logger.info(f"Checking audio clips for overlap with video timeline {video_timeline_range.start:.2f}-{video_timeline_range.end:.2f}s")
+
     for clip in all_clips:
         # Skip non-audio clips
         if clip.track_kind != 'Audio':
@@ -109,7 +115,10 @@ def build_clip_preview_with_audio(
         # Check for overlap
         overlap = video_timeline_range.intersection(clip_timeline_range)
         if overlap is None:
+            logger.info(f"  '{clip.name}' at {clip_timeline_range.start:.2f}-{clip_timeline_range.end:.2f}s: NO OVERLAP - excluding")
             continue
+
+        logger.info(f"  '{clip.name}' at {clip_timeline_range.start:.2f}-{clip_timeline_range.end:.2f}s: OVERLAP {overlap.start:.2f}-{overlap.end:.2f}s - including")
 
         # 3. Calculate source range for this overlap
         # How far into the audio clip does the overlap start?

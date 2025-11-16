@@ -262,6 +262,8 @@ def _build_timeline_clips(
     # Extract all clips from timeline
     all_clips = [video_clip]
 
+    logger.info(f"Video clip timeline position: {video_clip.timeline_start:.2f}-{video_clip.timeline_start + video_clip.timeline_duration:.2f}s (duration: {video_clip.timeline_duration:.2f}s)")
+
     for track in timeline_data.get('tracks', []):
         track_kind = track.get('kind', 'Video')
 
@@ -269,9 +271,12 @@ def _build_timeline_clips(
         if track_kind != 'Audio':
             continue
 
+        logger.debug(f"Processing audio track: {track.get('name', 'Unknown')}")
+
         for clip_info in track.get('clips', []):
             # Skip clips without proper timing info
             if 'start' not in clip_info or 'duration' not in clip_info:
+                logger.debug(f"  Skipping clip (no timing): {clip_info.get('name', 'unknown')}")
                 continue
 
             # Get source path - need to resolve the clip name to a full path
@@ -289,11 +294,17 @@ def _build_timeline_clips(
                 logger.warning(f"Skipping audio clip {clip_name}: file not found at {clip_path}")
                 continue
 
+            clip_timeline_start = clip_info['start']
+            clip_timeline_duration = clip_info['duration']
+            clip_timeline_end = clip_timeline_start + clip_timeline_duration
+
+            logger.info(f"  Audio clip '{clip_name}': timeline {clip_timeline_start:.2f}-{clip_timeline_end:.2f}s (duration: {clip_timeline_duration:.2f}s)")
+
             clip = TimelineClip(
                 name=clip_name,
                 source_path=clip_path,
-                timeline_start=clip_info['start'],
-                timeline_duration=clip_info['duration'],
+                timeline_start=clip_timeline_start,
+                timeline_duration=clip_timeline_duration,
                 source_start=clip_info.get('source_start', 0.0),
                 source_duration=clip_info.get('source_duration', clip_info['duration']),
                 track_kind='Audio',
