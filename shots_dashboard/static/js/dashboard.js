@@ -854,38 +854,8 @@ class ShotsDashboard {
     }
 
     buildClipPreviewUrl(filename, clipData) {
-        // Build clip data for API
-        const requestData = {
-            path: filename,
-            clip_data: {}
-        };
-
-        // Add timeline position (for overlap detection with other clips)
-        if (clipData.start !== undefined) {
-            requestData.clip_data.start = clipData.start;
-        }
-        if (clipData.duration !== undefined) {
-            requestData.clip_data.duration = clipData.duration;
-        }
-
-        // Add source range or segments
-        if (clipData.segments) {
-            // Merged clip with segments
-            requestData.clip_data.segments = clipData.segments;
-        } else if (clipData.source_start !== undefined && clipData.source_end !== undefined) {
-            // Simple clip with source range
-            requestData.clip_data.source_start = clipData.source_start;
-            requestData.clip_data.source_end = clipData.source_end;
-        }
-
-        // IMPORTANT: Add speed for accurate preview generation
-        if (clipData.speed !== undefined) {
-            requestData.clip_data.speed = clipData.speed;
-        }
-
-        // Encode the request data as a URL parameter for the POST request
-        // Since we can't use a simple GET URL, we'll need to fetch and create a blob URL
-        // Cache key for client-side caching
+        // For hover: return fallback immediately, update when ready
+        const requestData = this._buildClipRequestData(filename, clipData);
         const cacheKey = JSON.stringify(requestData);
 
         // Check cache
@@ -894,51 +864,10 @@ class ShotsDashboard {
             return this.clipPreviewCache.get(cacheKey);
         }
 
-        // Generate preview asynchronously and return a placeholder
-        // The actual preview will be loaded when the fetch completes
-        this.generateAndCacheClipPreview(filename, requestData, cacheKey);
-
-        // Return regular preview as fallback while clip preview is generating
-        return `/api/preview/${encodeURIComponent(filename)}`;
-    }
-
-    async generateAndCacheClipPreview(filename, requestData, cacheKey) {
-        try {
-            console.log('Generating clip preview for:', filename);
-
-            // Include timeline data for audio mixing
-            if (this.currentTimeline) {
-                requestData.timeline_data = this.currentTimeline;
-            }
-
-            const response = await fetch('/api/preview/clip', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
-
-            // Initialize cache if needed
-            if (!this.clipPreviewCache) {
-                this.clipPreviewCache = new Map();
-            }
-
-            // Cache the object URL
-            this.clipPreviewCache.set(cacheKey, objectUrl);
-
-            console.log('Clip preview cached for:', filename);
-
+        // Generate asynchronously and update preview when ready
+        this._generateClipPreviewAsync(filename, clipData).then(objectUrl => {
             // Update the current preview if it's still showing this file
             if (this.currentPreviewFilename === filename) {
-                // Reload with the accurate preview
                 const isAudio = this.isAudioFile(filename);
                 const isImage = this.isImageFile(filename);
 
@@ -952,13 +881,16 @@ class ShotsDashboard {
                     this.videoPlayer.load();
                 }
             }
-        } catch (error) {
+        }).catch(error => {
             console.error('Failed to generate clip preview:', error);
-        }
+        });
+
+        // Return regular preview as fallback while accurate preview is generating
+        return `/api/preview/${encodeURIComponent(filename)}`;
     }
 
-    async generateClipPreview(filename, clipData) {
-        // Build clip data for API
+    _buildClipRequestData(filename, clipData) {
+        // Build clip data for API (shared by both hover and click previews)
         const requestData = {
             path: filename,
             clip_data: {}
@@ -990,6 +922,27 @@ class ShotsDashboard {
             requestData.timeline_data = this.currentTimeline;
         }
 
+        return requestData;
+    }
+
+    async _generateClipPreviewAsync(filename, clipData) {
+        // Single code path for preview generation with caching
+        const requestData = this._buildClipRequestData(filename, clipData);
+        const cacheKey = JSON.stringify(requestData);
+
+        // Initialize cache if needed
+        if (!this.clipPreviewCache) {
+            this.clipPreviewCache = new Map();
+        }
+
+        // Check cache first
+        if (this.clipPreviewCache.has(cacheKey)) {
+            console.log('Using cached clip preview for:', filename);
+            return this.clipPreviewCache.get(cacheKey);
+        }
+
+        console.log('Generating clip preview for:', filename);
+
         const response = await fetch('/api/preview/clip', {
             method: 'POST',
             headers: {
@@ -1003,7 +956,18 @@ class ShotsDashboard {
         }
 
         const blob = await response.blob();
-        return URL.createObjectURL(blob);
+        const objectUrl = URL.createObjectURL(blob);
+
+        // Cache the result
+        this.clipPreviewCache.set(cacheKey, objectUrl);
+        console.log('Clip preview cached for:', filename);
+
+        return objectUrl;
+    }
+
+    async generateClipPreview(filename, clipData) {
+        // For click: wait for generation
+        return await this._generateClipPreviewAsync(filename, clipData);
     }
 }
 
