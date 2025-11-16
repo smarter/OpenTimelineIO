@@ -132,22 +132,46 @@ class AudioMix:
 
     All streams are mixed with equal weight. Use offset on individual
     streams to align them in time.
+
+    Args:
+        streams: Audio streams to mix
+        dropout_transition: Transition time in seconds when a stream ends (default: 2.0)
+        duration_mode: How to handle different stream lengths - 'first', 'longest', 'shortest' (default: 'first')
     """
     streams: tuple[AudioStream, ...]
+    dropout_transition: float = 2.0
+    duration_mode: str = 'first'
 
     def __post_init__(self) -> None:
-        """Validate that we have at least one stream"""
+        """Validate parameters"""
         if len(self.streams) == 0:
             raise ValueError("AudioMix requires at least one stream")
+        if self.dropout_transition < 0:
+            raise ValueError("dropout_transition must be non-negative")
+        if self.duration_mode not in ('first', 'longest', 'shortest'):
+            raise ValueError("duration_mode must be 'first', 'longest', or 'shortest'")
 
     def add_stream(self, stream: AudioStream) -> AudioMix:
         """Add a stream to the mix (returns new AudioMix)"""
-        return AudioMix(self.streams + (stream,))
+        return AudioMix(
+            self.streams + (stream,),
+            dropout_transition=self.dropout_transition,
+            duration_mode=self.duration_mode
+        )
 
     @staticmethod
-    def from_streams(streams: list[AudioStream]) -> AudioStream | AudioMix | None:
+    def from_streams(
+        streams: list[AudioStream],
+        dropout_transition: float = 2.0,
+        duration_mode: str = 'first'
+    ) -> AudioStream | AudioMix | None:
         """
         Convenience method to create the appropriate audio type.
+
+        Args:
+            streams: List of audio streams to mix
+            dropout_transition: Transition time when a stream ends (default: 2.0)
+            duration_mode: 'first', 'longest', or 'shortest' (default: 'first')
 
         Returns:
             - None if streams is empty
@@ -159,7 +183,11 @@ class AudioMix:
         elif len(streams) == 1:
             return streams[0]
         else:
-            return AudioMix(tuple(streams))
+            return AudioMix(
+                tuple(streams),
+                dropout_transition=dropout_transition,
+                duration_mode=duration_mode
+            )
 
 
 # ============================================================================
@@ -243,6 +271,20 @@ def build_audio_stream(
     )
 
 
-def mix_audio_streams(streams: list[AudioStream]) -> AudioStream | AudioMix | None:
-    """Convenience function to mix audio streams"""
-    return AudioMix.from_streams(streams)
+def mix_audio_streams(
+    streams: list[AudioStream],
+    dropout_transition: float = 2.0,
+    duration_mode: str = 'first'
+) -> AudioStream | AudioMix | None:
+    """
+    Convenience function to mix audio streams.
+
+    Args:
+        streams: List of audio streams to mix
+        dropout_transition: Transition time when a stream ends (default: 2.0)
+        duration_mode: 'first', 'longest', or 'shortest' (default: 'first')
+
+    Returns:
+        Mixed audio (None, AudioStream, or AudioMix depending on input)
+    """
+    return AudioMix.from_streams(streams, dropout_transition, duration_mode)

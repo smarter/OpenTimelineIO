@@ -181,7 +181,9 @@ def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
     num_inputs = len(audio_mix.streams)
 
     filter_parts.append(
-        f"{mix_inputs}amix=inputs={num_inputs}:duration=first:dropout_transition=2[aout]"
+        f"{mix_inputs}amix=inputs={num_inputs}:"
+        f"duration={audio_mix.duration_mode}:"
+        f"dropout_transition={audio_mix.dropout_transition}[aout]"
     )
 
     return ';'.join(filter_parts)
