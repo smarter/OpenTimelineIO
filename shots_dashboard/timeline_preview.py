@@ -247,6 +247,9 @@ def _build_timeline_clips(
     timeline_start = video_clip_data.get('timeline_start', video_clip_data.get('start', 0.0))
     timeline_duration = video_clip_data.get('timeline_duration', video_clip_data.get('duration', source_duration))
 
+    logger.info(f"Video clip data received: timeline_start={video_clip_data.get('timeline_start')}, start={video_clip_data.get('start')}, duration={video_clip_data.get('duration')}")
+    logger.info(f"Video clip using: timeline_start={timeline_start:.2f}s, timeline_duration={timeline_duration:.2f}s")
+
     # Create the video clip
     video_clip = TimelineClip(
         name=video_clip_path.name,
