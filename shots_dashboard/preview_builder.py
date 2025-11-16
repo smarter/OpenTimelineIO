@@ -50,6 +50,8 @@ class TimelineClip(NamedTuple):
     track_index: int  # Which track (0-indexed)
     # Audio properties
     audio_gain_db: float = 0.0  # Audio gain in decibels (default: 0 = no change)
+    # Video segments (for merged clips with multiple source ranges)
+    segments: list[dict] | None = None  # Optional: list of segment dicts
 
 
 # ============================================================================
@@ -89,7 +91,8 @@ def build_clip_preview_with_audio(
     video_stream = build_video_stream(
         media_path=video_clip.source_path,
         source_start=video_clip.source_start,
-        source_duration=video_clip.source_duration
+        source_duration=video_clip.source_duration,
+        segments=video_clip.segments  # Pass segments if present
     )
 
     # Define the video's timeline range
@@ -101,7 +104,7 @@ def build_clip_preview_with_audio(
     # 2. Find overlapping audio clips and build audio streams
     audio_streams: list[AudioStream] = []
 
-    logger.info(f"Checking audio clips for overlap with video timeline {video_timeline_range.start:.2f}-{video_timeline_range.end:.2f}s")
+    logger.info(f"Checking audio clips for overlap with video timeline {video_timeline_range.start:.6f}s - {video_timeline_range.end:.6f}s")
 
     for clip in all_clips:
         # Skip non-audio clips
@@ -117,10 +120,10 @@ def build_clip_preview_with_audio(
         # Check for overlap
         overlap = video_timeline_range.intersection(clip_timeline_range)
         if overlap is None:
-            logger.info(f"  '{clip.name}' at {clip_timeline_range.start:.2f}-{clip_timeline_range.end:.2f}s: NO OVERLAP - excluding")
+            logger.info(f"  '{clip.name}' at {clip_timeline_range.start:.6f}s - {clip_timeline_range.end:.6f}s: NO OVERLAP - excluding")
             continue
 
-        logger.info(f"  '{clip.name}' at {clip_timeline_range.start:.2f}-{clip_timeline_range.end:.2f}s: OVERLAP {overlap.start:.2f}-{overlap.end:.2f}s - including")
+        logger.info(f"  '{clip.name}' at {clip_timeline_range.start:.6f}s - {clip_timeline_range.end:.6f}s: OVERLAP {overlap.start:.6f}s - {overlap.end:.6f}s (duration: {overlap.duration:.6f}s) - including")
 
         # 3. Calculate source range for this overlap
         # How far into the audio clip does the overlap start?
@@ -135,6 +138,13 @@ def build_clip_preview_with_audio(
         # Calculate output offset (relative to video start)
         # This is where in the output this audio should start
         output_offset = overlap.start - video_timeline_range.start
+
+        logger.info(f"  Audio timing calculation:")
+        logger.info(f"    Clip timeline: {clip.timeline_start:.6f}s - {clip.timeline_start + clip.timeline_duration:.6f}s")
+        logger.info(f"    Clip source: {clip.source_start:.6f}s - {clip.source_start + clip.source_duration:.6f}s")
+        logger.info(f"    Offset into clip: {offset_in_clip:.6f}s")
+        logger.info(f"    Extract from source: {audio_source_start:.6f}s (duration: {audio_source_duration:.6f}s)")
+        logger.info(f"    Place at output offset: {output_offset:.6f}s")
 
         # Create audio stream
         audio_stream = build_audio_stream(

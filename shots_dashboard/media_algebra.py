@@ -79,18 +79,32 @@ class MediaFile:
 # ============================================================================
 
 @dataclass(frozen=True)
+class VideoSegment:
+    """
+    A single segment of video from a source file.
+
+    Used when a clip in the timeline consists of multiple non-contiguous
+    portions of the source media (e.g., due to cuts or speed changes).
+    """
+    source_start: float  # Start time in source file (seconds)
+    source_duration: float  # Duration to extract from source (seconds)
+
+
+@dataclass(frozen=True)
 class VideoStream:
     """
     A video stream (video only, no audio).
 
     Represents extracting video from a source file within a specific time range.
+    Can optionally represent multiple segments for clips that have been cut/edited.
     """
     media: MediaFile
     source_range: TimeRange
+    segments: tuple[VideoSegment, ...] | None = None  # Optional: multiple segments
 
     def trim(self, time_range: TimeRange) -> VideoStream:
         """Trim this stream to a new time range"""
-        return VideoStream(self.media, time_range)
+        return VideoStream(self.media, time_range, self.segments)
 
 
 @dataclass(frozen=True)
@@ -224,12 +238,35 @@ class Output:
 def build_video_stream(
     media_path: Path,
     source_start: float,
-    source_duration: float
+    source_duration: float,
+    segments: list[dict] | None = None
 ) -> VideoStream:
-    """Build a video stream from basic parameters"""
+    """
+    Build a video stream from basic parameters.
+
+    Args:
+        media_path: Path to media file
+        source_start: Start time in source (seconds) - used if no segments
+        source_duration: Duration from source (seconds) - used if no segments
+        segments: Optional list of segment dicts with 'source_start' and 'source_duration'
+
+    Returns:
+        VideoStream with optional segments
+    """
+    video_segments = None
+    if segments:
+        video_segments = tuple(
+            VideoSegment(
+                source_start=seg['source_start'],
+                source_duration=seg['source_duration']
+            )
+            for seg in segments
+        )
+
     return VideoStream(
         media=MediaFile(media_path),
-        source_range=TimeRange(source_start, source_duration)
+        source_range=TimeRange(source_start, source_duration),
+        segments=video_segments
     )
 
 

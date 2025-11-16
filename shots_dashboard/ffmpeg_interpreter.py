@@ -12,6 +12,7 @@ from media_algebra import (
     Output,
     AVComposition,
     VideoStream,
+    VideoSegment,
     AudioStream,
     AudioMix,
 )
@@ -44,13 +45,21 @@ def to_ffmpeg_command(output: Output) -> list[str]:
     # Input Stage: Add all input files
     # ========================================================================
 
-    # Add video input with seek and duration
-    cmd.extend([
-        '-ss', _format_time(comp.video.source_range.start),
-        '-t', _format_time(comp.video.source_range.duration),
-        '-i', str(comp.video.media.path)
-    ])
-    video_input_index = 0
+    # Check if video has segments (requires different handling)
+    has_video_segments = comp.video.segments is not None and len(comp.video.segments) > 1
+
+    if has_video_segments:
+        # For segmented video, add input without seeking (we'll use filter_complex)
+        cmd.extend(['-i', str(comp.video.media.path)])
+        video_input_index = 0
+    else:
+        # For simple video, add input with seek and duration
+        cmd.extend([
+            '-ss', _format_time(comp.video.source_range.start),
+            '-t', _format_time(comp.video.source_range.duration),
+            '-i', str(comp.video.media.path)
+        ])
+        video_input_index = 0
 
     # Add audio inputs
     audio_input_indices = []
@@ -74,43 +83,82 @@ def to_ffmpeg_command(output: Output) -> list[str]:
             audio_input_indices.append(i + 1)
 
     # ========================================================================
-    # Filter Stage: Build filter_complex for audio processing
+    # Filter Stage: Build filter_complex for video and audio processing
     # ========================================================================
+
+    filter_parts = []
+    video_output_label = f'{video_input_index}:v'  # Default: direct video mapping
+
+    # Handle segmented video first (if needed)
+    if has_video_segments:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Building video concat filter for {len(comp.video.segments)} segments")
+
+        # Build video concat filter
+        video_concat_parts = []
+
+        for i, segment in enumerate(comp.video.segments):
+            logger.info(f"  Segment {i}: source {segment.source_start:.6f}s, duration {segment.source_duration:.6f}s")
+
+            # Use trim filter to extract each segment, then setpts to reset timestamps
+            video_concat_parts.append(
+                f"[{video_input_index}:v]trim=start={segment.source_start:.6f}:duration={segment.source_duration:.6f},setpts=PTS-STARTPTS[v{i}]"
+            )
+
+        # Concatenate all video segments
+        segment_inputs = ''.join(f'[v{i}]' for i in range(len(comp.video.segments)))
+        video_concat_parts.append(
+            f"{segment_inputs}concat=n={len(comp.video.segments)}:v=1:a=0[vout]"
+        )
+
+        filter_parts.extend(video_concat_parts)
+        video_output_label = '[vout]'  # Use concat output
+
+    # Handle audio processing
+    audio_output_label = None
 
     if isinstance(comp.audio, AudioMix) and len(comp.audio.streams) > 1:
         # Need to mix multiple audio streams with offsets
-        filter_complex = _build_audio_mix_filter(comp.audio)
-        cmd.extend(['-filter_complex', filter_complex])
-        cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
+        audio_filter_parts = _build_audio_mix_filter_parts(comp.audio)
+        filter_parts.extend(audio_filter_parts)
+        audio_output_label = '[aout]'
 
     elif isinstance(comp.audio, AudioStream):
         # Single audio stream - check if it needs delay/offset or volume
         if comp.audio.offset > 0 or comp.audio.volume_db != 0.0:
             # Need to apply filters using filter_complex
-            filter_complex = _build_single_audio_filter(comp.audio)
-            cmd.extend(['-filter_complex', filter_complex])
-            cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
+            audio_filter_parts = _build_single_audio_filter_parts(comp.audio)
+            filter_parts.extend(audio_filter_parts)
+            audio_output_label = '[aout]'
         else:
             # No offset or volume adjustment, just map directly
-            cmd.extend(['-map', f'{video_input_index}:v', '-map', '1:a'])
+            audio_output_label = '1:a'
 
     elif isinstance(comp.audio, AudioMix) and len(comp.audio.streams) == 1:
         # AudioMix with single stream - treat as single stream
         stream = comp.audio.streams[0]
         if stream.offset > 0 or stream.volume_db != 0.0:
-            filter_complex = _build_single_audio_filter(stream)
-            cmd.extend(['-filter_complex', filter_complex])
-            cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
+            audio_filter_parts = _build_single_audio_filter_parts(stream)
+            filter_parts.extend(audio_filter_parts)
+            audio_output_label = '[aout]'
         else:
-            cmd.extend(['-map', f'{video_input_index}:v', '-map', '1:a'])
+            audio_output_label = '1:a'
 
+    # Build final filter_complex if needed
+    if filter_parts:
+        filter_complex = ';'.join(filter_parts)
+        cmd.extend(['-filter_complex', filter_complex])
+
+    # Map outputs
+    cmd.extend(['-map', video_output_label])
+
+    if audio_output_label:
+        cmd.extend(['-map', audio_output_label])
     elif comp.audio is None:
-        # No audio
-        cmd.extend(['-map', f'{video_input_index}:v', '-an'])
-
+        cmd.extend(['-an'])  # No audio
     else:
-        # Fallback - just map video
-        cmd.extend(['-map', f'{video_input_index}:v', '-an'])
+        cmd.extend(['-an'])  # Fallback
 
     # ========================================================================
     # Output Stage: Encoding options and output file
@@ -129,9 +177,9 @@ def to_ffmpeg_command(output: Output) -> list[str]:
     return cmd
 
 
-def _build_single_audio_filter(audio_stream: AudioStream) -> str:
+def _build_single_audio_filter_parts(audio_stream: AudioStream) -> list[str]:
     """
-    Build a filter_complex string for a single audio stream.
+    Build filter parts for a single audio stream.
 
     Applies volume adjustment and/or delay as needed.
 
@@ -139,7 +187,7 @@ def _build_single_audio_filter(audio_stream: AudioStream) -> str:
         audio_stream: The AudioStream to process
 
     Returns:
-        filter_complex string for ffmpeg
+        List of filter parts for filter_complex
     """
     filters = []
 
@@ -156,28 +204,46 @@ def _build_single_audio_filter(audio_stream: AudioStream) -> str:
     filters.append("aformat=sample_fmts=fltp")
 
     filter_chain = ','.join(filters)
-    return f"[1:a]{filter_chain}[aout]"
+    return [f"[1:a]{filter_chain}[aout]"]
 
 
-def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
+def _build_single_audio_filter(audio_stream: AudioStream) -> str:
     """
-    Build a filter_complex string for mixing audio with offsets.
+    Build a filter_complex string for a single audio stream (legacy).
 
-    This creates a filter graph that:
-    1. Delays each stream by its offset
-    2. Mixes all delayed streams together
+    Args:
+        audio_stream: The AudioStream to process
+
+    Returns:
+        filter_complex string for ffmpeg
+    """
+    return ';'.join(_build_single_audio_filter_parts(audio_stream))
+
+
+def _build_audio_mix_filter_parts(audio_mix: AudioMix) -> list[str]:
+    """
+    Build filter parts for mixing audio with offsets.
+
+    This creates filter parts that:
+    1. Delay each stream by its offset
+    2. Mix all delayed streams together
 
     Args:
         audio_mix: The AudioMix to process
 
     Returns:
-        filter_complex string for ffmpeg
+        List of filter parts for filter_complex
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     filter_parts = []
 
     # Process each stream
     for i, stream in enumerate(audio_mix.streams):
         input_idx = i + 1  # Input 0 is video, audio starts at 1
+
+        logger.info(f"  Processing audio stream {i}: source {stream.source_range.start:.6f}s, offset {stream.offset:.6f}s, volume {stream.volume_db:.2f}dB")
 
         # Build filter chain for this stream
         filters = []
@@ -192,6 +258,7 @@ def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
             # adelay uses milliseconds, all=1 applies to all channels
             delay_ms = int(stream.offset * 1000)
             filters.append(f"adelay={delay_ms}:all=1")
+            logger.info(f"    Applying adelay: {delay_ms}ms ({stream.offset:.6f}s)")
 
         # 3. Normalize audio format
         filters.append("aformat=sample_fmts=fltp")
@@ -209,7 +276,20 @@ def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
         f"{mix_inputs}amix=inputs={num_inputs}:duration=longest:dropout_transition=0[aout]"
     )
 
-    return ';'.join(filter_parts)
+    return filter_parts
+
+
+def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
+    """
+    Build a filter_complex string for mixing audio with offsets (legacy).
+
+    Args:
+        audio_mix: The AudioMix to process
+
+    Returns:
+        filter_complex string for ffmpeg
+    """
+    return ';'.join(_build_audio_mix_filter_parts(audio_mix))
 
 
 def _format_time(seconds: float) -> str:

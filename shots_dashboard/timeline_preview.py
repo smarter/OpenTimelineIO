@@ -243,12 +243,20 @@ def _build_timeline_clips(
             # Use clip duration if available
             source_duration = video_clip_data.get('duration', 10.0)
 
+    # Check for segments (merged clips with multiple source ranges)
+    segments = video_clip_data.get('segments')
+    if segments:
+        logger.info(f"Video clip has {len(segments)} segments (merged from multiple timeline clips)")
+        for i, seg in enumerate(segments):
+            logger.info(f"  Segment {i}: timeline {seg.get('timeline_start', 0):.6f}s, source {seg.get('source_start', 0):.6f}s, duration {seg.get('source_duration', 0):.6f}s")
+
     # Get timeline position - this should be in the clip data
     timeline_start = video_clip_data.get('timeline_start', video_clip_data.get('start', 0.0))
     timeline_duration = video_clip_data.get('timeline_duration', video_clip_data.get('duration', source_duration))
 
+    logger.info(f"=== PREVIEW GENERATION FOR: {video_clip_path.name} ===")
     logger.info(f"Video clip data received: timeline_start={video_clip_data.get('timeline_start')}, start={video_clip_data.get('start')}, duration={video_clip_data.get('duration')}")
-    logger.info(f"Video clip using: timeline_start={timeline_start:.2f}s, timeline_duration={timeline_duration:.2f}s")
+    logger.info(f"Video clip using: timeline_start={timeline_start:.6f}s - {timeline_start + timeline_duration:.6f}s (duration: {timeline_duration:.6f}s)")
 
     # Create the video clip
     video_clip = TimelineClip(
@@ -259,7 +267,8 @@ def _build_timeline_clips(
         source_start=source_start,
         source_duration=source_duration,
         track_kind='Video',
-        track_index=0
+        track_index=0,
+        segments=segments  # Pass segments if present
     )
 
     # Extract all clips from timeline
@@ -301,7 +310,7 @@ def _build_timeline_clips(
             clip_timeline_duration = clip_info['duration']
             clip_timeline_end = clip_timeline_start + clip_timeline_duration
 
-            logger.info(f"  Audio clip '{clip_name}': timeline {clip_timeline_start:.2f}-{clip_timeline_end:.2f}s (duration: {clip_timeline_duration:.2f}s)")
+            logger.info(f"  Audio clip '{clip_name}': timeline {clip_timeline_start:.6f}s - {clip_timeline_end:.6f}s (duration: {clip_timeline_duration:.6f}s)")
 
             # Get audio gain from clip info if present
             audio_gain_db = clip_info.get('audio_gain_db', 0.0)
