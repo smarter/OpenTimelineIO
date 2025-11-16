@@ -83,13 +83,33 @@ def to_ffmpeg_command(output: Output) -> list[str]:
         cmd.extend(['-filter_complex', filter_complex])
         cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
 
-    elif comp.audio is not None:
-        # Single audio stream - just map it
-        audio_idx = 1 if isinstance(comp.audio, AudioStream) else 0
-        cmd.extend(['-map', f'{video_input_index}:v', '-map', f'{audio_idx}:a'])
+    elif isinstance(comp.audio, AudioStream):
+        # Single audio stream - check if it needs delay/offset
+        if comp.audio.offset > 0:
+            # Need to apply delay using filter_complex
+            filter_complex = _build_single_audio_delay_filter(comp.audio)
+            cmd.extend(['-filter_complex', filter_complex])
+            cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
+        else:
+            # No offset, just map directly
+            cmd.extend(['-map', f'{video_input_index}:v', '-map', '1:a'])
+
+    elif isinstance(comp.audio, AudioMix) and len(comp.audio.streams) == 1:
+        # AudioMix with single stream - treat as single stream
+        stream = comp.audio.streams[0]
+        if stream.offset > 0:
+            filter_complex = _build_single_audio_delay_filter(stream)
+            cmd.extend(['-filter_complex', filter_complex])
+            cmd.extend(['-map', f'{video_input_index}:v', '-map', '[aout]'])
+        else:
+            cmd.extend(['-map', f'{video_input_index}:v', '-map', '1:a'])
+
+    elif comp.audio is None:
+        # No audio
+        cmd.extend(['-map', f'{video_input_index}:v', '-an'])
 
     else:
-        # No audio
+        # Fallback - just map video
         cmd.extend(['-map', f'{video_input_index}:v', '-an'])
 
     # ========================================================================
@@ -107,6 +127,20 @@ def to_ffmpeg_command(output: Output) -> list[str]:
     cmd.append(str(output.output_path))
 
     return cmd
+
+
+def _build_single_audio_delay_filter(audio_stream: AudioStream) -> str:
+    """
+    Build a filter_complex string for a single audio stream with delay.
+
+    Args:
+        audio_stream: The AudioStream with offset > 0
+
+    Returns:
+        filter_complex string for ffmpeg
+    """
+    delay_ms = int(audio_stream.offset * 1000)
+    return f"[1:a]adelay={delay_ms}:all=1,aformat=sample_fmts=fltp[aout]"
 
 
 def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
@@ -131,15 +165,15 @@ def _build_audio_mix_filter(audio_mix: AudioMix) -> str:
 
         if stream.offset > 0:
             # Add silence padding at the beginning
-            # adelay uses milliseconds
+            # adelay uses milliseconds, all=1 applies to all channels
             delay_ms = int(stream.offset * 1000)
             filter_parts.append(
-                f"[{input_idx}:a]adelay={delay_ms}|{delay_ms}[a{i}]"
+                f"[{input_idx}:a]adelay={delay_ms}:all=1,aformat=sample_fmts=fltp[a{i}]"
             )
         else:
-            # No offset needed
+            # No offset needed, just normalize format
             filter_parts.append(
-                f"[{input_idx}:a]aformat=sample_fmts=fltp:channel_layouts=stereo[a{i}]"
+                f"[{input_idx}:a]aformat=sample_fmts=fltp[a{i}]"
             )
 
     # Mix all processed streams

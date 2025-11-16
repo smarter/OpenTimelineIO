@@ -50,7 +50,9 @@ def generate_timeline_preview(
         # Create output directory if needed
         if output_dir is None:
             output_dir = Path(tempfile.gettempdir()) / "timeline_previews"
-            output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Ensure output directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate unique output filename based on video path and clip data
         import hashlib
@@ -172,10 +174,13 @@ def _generate_simple_preview(
     # Create composition with no audio
     composition = AVComposition(video=video_stream, audio=None)
 
-    # Create output specification
+    # Create output specification with WebM codecs
     output = Output(
         composition=composition,
         output_path=output_path,
+        format='webm',
+        codec_video='libvpx-vp9',
+        codec_audio='libopus',
         preset='veryfast'
     )
 

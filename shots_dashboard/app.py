@@ -775,23 +775,17 @@ def create_app(
             logger.info(f"Generating preview for {source_path.name}")
 
             try:
+                # Always use timeline preview (strips audio when timeline_data is None)
                 if timeline_data:
-                    # Use timeline-aware preview with audio mixing
                     logger.info("Generating timeline preview with audio mixing")
-                    preview_path = generate_timeline_preview(
-                        clip_data,
-                        source_path,
-                        timeline_data
-                    )
                 else:
-                    # Fallback to simple clip preview
-                    logger.info("Generating simple clip preview")
-                    generator = ClipPreviewGenerator()
-                    preview_path = generator.generate_preview(
-                        clip_data,
-                        source_path,
-                        timeout=300
-                    )
+                    logger.info("Generating simple clip preview (no audio)")
+
+                preview_path = generate_timeline_preview(
+                    clip_data,
+                    source_path,
+                    timeline_data
+                )
             except (PreviewGenerationError, TimelinePreviewError) as e:
                 logger.error(f"Preview generation failed: {e}")
                 return jsonify({

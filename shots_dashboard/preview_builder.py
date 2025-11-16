@@ -145,11 +145,22 @@ def build_clip_preview_with_audio(
     )
 
     # 6. Create output specification
-    return Output(
-        composition=composition,
-        output_path=output_path,
-        preset='veryfast'  # Fast preview generation
-    )
+    # Use WebM codecs if output is .webm
+    if output_path.suffix.lower() == '.webm':
+        return Output(
+            composition=composition,
+            output_path=output_path,
+            format='webm',
+            codec_video='libvpx-vp9',
+            codec_audio='libopus',
+            preset='veryfast'  # Fast preview generation
+        )
+    else:
+        return Output(
+            composition=composition,
+            output_path=output_path,
+            preset='veryfast'  # Fast preview generation
+        )
 
 
 def build_simple_clip_preview(
@@ -192,11 +203,22 @@ def build_simple_clip_preview(
         audio=audio
     )
 
-    return Output(
-        composition=composition,
-        output_path=output_path,
-        preset='veryfast'
-    )
+    # Use WebM codecs if output is .webm
+    if output_path.suffix.lower() == '.webm':
+        return Output(
+            composition=composition,
+            output_path=output_path,
+            format='webm',
+            codec_video='libvpx-vp9',
+            codec_audio='libopus',
+            preset='veryfast'
+        )
+    else:
+        return Output(
+            composition=composition,
+            output_path=output_path,
+            preset='veryfast'
+        )
 
 
 # ============================================================================
