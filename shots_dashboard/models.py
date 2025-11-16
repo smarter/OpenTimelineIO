@@ -47,11 +47,11 @@ class FileRecord:
     last_updated: datetime
 
     def with_state(self, new_state: FileState) -> FileRecord:
-        """Create a new FileRecord with updated state and timestamp."""
+        """Create a new FileRecord with updated state, preserving original timestamp."""
         return FileRecord(
             path=self.path,
             state=new_state,
-            last_updated=datetime.now()
+            last_updated=self.last_updated  # Preserve original file modification time
         )
 
     def is_audio(self) -> bool:

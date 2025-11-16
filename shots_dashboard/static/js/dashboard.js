@@ -351,7 +351,12 @@ class ShotsDashboard {
                 const clipContent = document.createElement('div');
                 clipContent.className = 'clip-content';
                 clipContent.textContent = clip.name;
-                clipContent.title = `${clip.name}\nStart: ${this.formatDuration(clip.start)}\nDuration: ${this.formatDuration(clip.duration)}`;
+
+                // Calculate frame count (default to 24 fps if not available)
+                const fps = clip.fps || 24;
+                const frameCount = Math.round(clip.duration * fps);
+
+                clipContent.title = `${clip.name}\nStart: ${this.formatDuration(clip.start)}\nDuration: ${this.formatDuration(clip.duration)}\nFrames: ${frameCount} (${fps} fps)`;
 
                 clipEl.appendChild(clipContent);
 

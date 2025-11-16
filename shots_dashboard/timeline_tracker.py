@@ -151,10 +151,12 @@ class TimelineTracker:
                 ):
                     initial_state = FileState.REMOVED
 
+                # Use file's actual modification time instead of current time
+                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
                 record = FileRecord(
                     path=file_path,
                     state=initial_state,
-                    last_updated=datetime.now()
+                    last_updated=file_mtime
                 )
                 self.state.update_file(record)
                 transitions.append(StateTransition(

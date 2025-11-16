@@ -288,7 +288,8 @@ def create_app(
                                         "source_start": source_start,
                                         "source_end": source_end,
                                         "source_duration": source_duration,
-                                        "speed": speed
+                                        "speed": speed,
+                                        "fps": float(duration_clip.rate)
                                     })
 
                             # Merge adjacent clips with the same name (preserving segment info)
@@ -452,7 +453,8 @@ def create_app(
                                 "source_start": source_start,
                                 "source_end": source_end,
                                 "source_duration": source_duration,
-                                "speed": speed
+                                "speed": speed,
+                                "fps": float(duration_clip.rate)
                             })
 
                     # Merge adjacent clips (same logic as emit_update)
