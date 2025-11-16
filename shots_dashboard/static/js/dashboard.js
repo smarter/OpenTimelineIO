@@ -980,6 +980,11 @@ class ShotsDashboard {
             requestData.clip_data.source_end = clipData.source_end;
         }
 
+        // Add speed for cache consistency
+        if (clipData.speed !== undefined) {
+            requestData.clip_data.speed = clipData.speed;
+        }
+
         // Include timeline data for audio mixing
         if (this.currentTimeline) {
             requestData.timeline_data = this.currentTimeline;
