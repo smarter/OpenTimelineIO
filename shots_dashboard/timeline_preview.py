@@ -119,13 +119,14 @@ def generate_timeline_preview(
         result = subprocess.run(
             cmd,
             capture_output=True,
-            text=True,
             timeout=60
         )
 
         if result.returncode != 0:
-            logger.error(f"FFmpeg failed: {result.stderr}")
-            raise TimelinePreviewError(f"FFmpeg error: {result.stderr[:200]}")
+            # Decode stderr with latin-1 which accepts all byte values
+            stderr = result.stderr.decode('latin-1')
+            logger.error(f"FFmpeg failed: {stderr}")
+            raise TimelinePreviewError(f"FFmpeg error: {stderr[:200]}")
 
         if not output_path.exists():
             raise TimelinePreviewError("Preview file was not created")
@@ -190,11 +191,17 @@ def _generate_simple_preview(
     logger.info(f"Generating simple preview (no audio): {output_path.name}")
     logger.debug(f"FFmpeg command: {' '.join(cmd)}")
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        timeout=60
+    )
 
     if result.returncode != 0:
-        logger.error(f"FFmpeg failed: {result.stderr}")
-        raise TimelinePreviewError(f"FFmpeg error: {result.stderr[:200]}")
+        # Decode stderr with latin-1 which accepts all byte values
+        stderr = result.stderr.decode('latin-1')
+        logger.error(f"FFmpeg failed: {stderr}")
+        raise TimelinePreviewError(f"FFmpeg error: {stderr[:200]}")
 
     if not output_path.exists():
         raise TimelinePreviewError("Preview file was not created")
